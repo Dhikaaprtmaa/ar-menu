@@ -184,43 +184,71 @@
 
             const nativeVideo = document.getElementById('webcam-video-stream');
 
-            // Parameter Utama: Kamera Belakang Lingkungan dengan Resolusi Ideal HD
+            // Tambahkan parameter penunjang kepatuhan autoplay kebijakan browser secara paksa
+            nativeVideo.setAttribute('autoplay', 'true');
+            nativeVideo.setAttribute('muted', 'true');
+            nativeVideo.setAttribute('playsinline', 'true');
+            nativeVideo.setAttribute('webkit-playsinline', 'true');
+
             const primaryConstraints = {
                 video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
             };
 
-            // Parameter Cadangan: Jika kamera HP menolak resolusi HD ideal di atas
             const fallbackConstraints = {
                 video: { facingMode: 'environment' },
                 audio: false
             };
 
             function assignStreamToVideo(stream) {
-                nativeVideo.srcObject = stream;
-                // Paksa pemutaran video secara instan lewat penanganan event handler native
+                if ('srcObject' in nativeVideo) {
+                    nativeVideo.srcObject = stream;
+                } else {
+                    nativeVideo.src = window.URL.createObjectURL(stream);
+                }
+
+                // Event 1: Eksekusi saat data metadata kamera siap dimuat
                 nativeVideo.onloadedmetadata = function() {
-                    nativeVideo.play().then(() => {
-                        console.log("✓ Pancaran kamera terbukti aktif di layar.");
-                        injectARSceneFramework();
-                    }).catch(err => {
-                        // Coba paksa play sekali lagi jika siklus interaksi tersendat
-                        nativeVideo.play();
-                        injectARSceneFramework();
-                    });
+                    forcePlayVideo(nativeVideo);
+                };
+
+                // Event 2: Eksekusi saat frame pertama video mendarat di DOM
+                nativeVideo.onloadeddata = function() {
+                    forcePlayVideo(nativeVideo);
                 };
             }
 
-            // Eksekusi Tahap 1: Gunakan parameter ideal
+            function forcePlayVideo(videoElem) {
+                videoElem.play()
+                .then(() => {
+                    console.log("✓ Pancaran data stream kamera aktif.");
+                    // Jalankan pembentukan framework AR.js HANYA jika belum pernah diinjeksi
+                    if (!document.querySelector('a-scene')) {
+                        injectARSceneFramework();
+                    }
+                })
+                .catch(err => {
+                    console.warn("Autoplay ditangguhkan oleh browser. Menyiapkan pemicu klik manual...", err);
+                    // Solusi Pamungkas: Jika browser memblokir siklus, paksa play ketika pengguna menyentuh layar
+                    document.body.addEventListener('click', () => {
+                        videoElem.play();
+                        if (!document.querySelector('a-scene')) {
+                            injectARSceneFramework();
+                        }
+                    }, { once: true });
+                });
+            }
+
+            // Eksekusi Tahap 1: Gunakan resolusi ideal HD
             navigator.mediaDevices.getUserMedia(primaryConstraints)
             .then(assignStreamToVideo)
             .catch(function(err) {
-                console.warn("⚠️ Kamera menolak resolusi ideal, mencoba parameter cadangan...", err);
-                // Eksekusi Tahap 2: Gunakan parameter cadangan otomatis (Universal Fallback)
+                console.warn("Kamera menolak parameter ideal. Mencoba parameter universal fallback...", err);
+                // Eksekusi Tahap 2: Gunakan parameter cadangan universal otomatis
                 navigator.mediaDevices.getUserMedia(fallbackConstraints)
                 .then(assignStreamToVideo)
                 .catch(function(finalErr) {
-                    alert("Gagal memicu hardware kamera: " + finalErr.message);
+                    alert("Gagal memicu hardware kamera internal device: " + finalErr.message);
                 });
             });
         }
@@ -230,7 +258,6 @@
             document.getElementById('ar-ui-layer').style.display = 'flex';
 
             const placeholder = document.getElementById('scene-placeholder');
-            // Ditambahkan properti renderer 'alpha: true' dan penyesuaian transparansi kanvas
             placeholder.innerHTML = `
                 <a-scene 
                     embedded 
@@ -240,27 +267,38 @@
                     vr-mode-ui="enabled: false"
                 >
                     <a-assets>
-                        <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
-                        <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
+                        <a-asset-item id="nasgor-model" src="https://gltf-models.s3.amazonaws.com/food/pancake_or_bowl/scene.gltf" timeout="10000"></a-asset-item>
+                        <a-asset-item id="esteh-model" src="https://gltf-models.s3.amazonaws.com/food/drink_can/scene.gltf" timeout="10000"></a-asset-item>
                     </a-assets>
 
-                    <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
-                    <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
-                    <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+                    <a-entity light="type: ambient; intensity: 1.0; color: #ffffff;"></a-entity>
+                    <a-entity light="type: directional; intensity: 1.5; color: #ffffff;" position="2 4 3"></a-entity>
 
                     <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                        <a-entity 
+                            gltf-model="#nasgor-model" 
+                            position="0 0.1 0" 
+                            scale="0.5 0.5 0.5" 
+                            class="clickable" 
+                            gesture-handler="minScale: 0.1; maxScale: 5;">
+                        </a-entity>
                     </a-marker>
 
                     <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                        <a-entity 
+                            gltf-model="#esteh-model" 
+                            position="0 0.1 0" 
+                            scale="0.4 0.4 0.4" 
+                            class="clickable" 
+                            gesture-handler="minScale: 0.1; maxScale: 5;">
+                        </a-entity>
                     </a-marker>
 
                     <a-entity camera position="0 0 0"></a-entity>
                 </a-scene>
             `;
 
-            // Bersihkan paksa warna latar belakang bawaan kanvas internal A-Frame agar transparan total
+            // Paksa pembersihan properti background bawaan kanvas internal A-Frame agar transparan sempurna
             setTimeout(() => {
                 const canvas = document.querySelector('.a-canvas');
                 if (canvas) {
