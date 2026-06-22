@@ -274,109 +274,157 @@
     <div id="scene-placeholder"></div>
 
     <script>
+        // Global camera stream reference
+        let globalCameraStream = null;
+
+        async function requestCameraAccess() {
+            console.log('📸 Requesting camera access...');
+            try {
+                // Request camera permission
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+
+                globalCameraStream = stream;
+                console.log('✓ Camera access granted!');
+                return stream;
+            } catch (error) {
+                console.error('❌ Camera access denied:', error.name, error.message);
+                
+                // Show error message
+                const permissionScreen = document.getElementById('camera-permission-screen');
+                const errorMsg = document.createElement('div');
+                errorMsg.style.cssText = 'color: #ef4444; font-size: 14px; margin-top: 20px; background: #fee2e2; padding: 12px; border-radius: 8px; border-left: 3px solid #ef4444;';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMsg.innerHTML = '❌ <strong>Akses Kamera Ditolak</strong><br>Silakan izinkan akses kamera di pengaturan browser.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg.innerHTML = '❌ <strong>Kamera Tidak Ditemukan</strong><br>Pastikan perangkat memiliki kamera yang berfungsi.';
+                } else {
+                    errorMsg.innerHTML = `❌ <strong>Error:</strong> ${error.name}<br>${error.message}`;
+                }
+                
+                permissionScreen.appendChild(errorMsg);
+                throw error;
+            }
+        }
+
         function initiateARScene() {
-            // 1. Memicu izin sensor gerak iOS jika ada
+            // 1. Memicu izin sensor gerak iOS
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().catch(err => console.log(err));
+                DeviceOrientationEvent.requestPermission()
+                    .then(() => console.log('✓ Motion sensor permission granted'))
+                    .catch(err => console.warn('⚠ Motion sensor permission:', err.message));
             }
 
-            // 2. Sembunyikan blocker screen dan tampilkan overlay UI
-            document.getElementById('camera-permission-screen').style.display = 'none';
-            document.getElementById('ar-ui-layer').style.display = 'flex';
+            // 2. Request camera access first
+            requestCameraAccess().then(() => {
+                // 3. Sembunyikan blocker screen
+                document.getElementById('camera-permission-screen').style.display = 'none';
+                document.getElementById('ar-ui-layer').style.display = 'flex';
 
-            // 3. Suntikkan skrip a-scene AR.js v3.4.7 dengan pengaturan optimalisasi rendering
-            const placeholder = document.getElementById('scene-placeholder');
-            placeholder.innerHTML = `
-                <a-scene 
-                    embedded 
-                    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
-                    gesture-detector
-                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: false; precision: mediump;"
-                    vr-mode-ui="enabled: false"
-                    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; z-index: 1;"
-                >
-                    <a-assets>
-                        <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
-                        <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
-                    </a-assets>
+                // 4. Suntikkan skrip a-scene AR.js
+                const placeholder = document.getElementById('scene-placeholder');
+                placeholder.innerHTML = `
+                    <a-scene 
+                        embedded 
+                        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
+                        gesture-detector
+                        renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: false; precision: mediump;"
+                        vr-mode-ui="enabled: false"
+                        style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; z-index: 1;"
+                    >
+                        <a-assets>
+                            <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
+                            <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
+                        </a-assets>
 
-                    <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
-                    <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
-                    <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+                        <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
+                        <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
+                        <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
 
-                    <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                    </a-marker>
+                        <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                            <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                        </a-marker>
 
-                    <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                    </a-marker>
+                        <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                            <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                        </a-marker>
 
-                    <a-entity camera position="0 0 0"></a-entity>
-                </a-scene>
-            `;
+                        <a-entity camera position="0 0 0"></a-entity>
+                    </a-scene>
+                `;
 
-            console.log('🎬 AR Scene initialized, waiting for A-Frame to load...');
+                console.log('🎬 AR Scene injected, waiting for A-Frame to load...');
 
-            // 4. Tunggu sampai A-Frame selesai loading dan kamera siap
-            setTimeout(() => {
-                const sceneEl = document.querySelector('a-scene');
-                if (sceneEl && sceneEl.hasLoaded) {
-                    console.log('✓ A-Frame scene loaded');
-                    initiateMarkerListeners();
+                // 5. Setup camera feed setelah A-Frame load
+                setTimeout(() => {
                     setupCameraFeed();
-                } else {
-                    // Coba lagi jika belum siap
-                    setTimeout(initiateARScene.bind(this), 500);
-                }
-            }, 1000);
+                    initiateMarkerListeners();
+                }, 1500);
+            }).catch(error => {
+                console.error('❌ Failed to start AR scene:', error);
+                // Error message sudah ditampilkan di requestCameraAccess
+            });
         }
 
         function setupCameraFeed() {
-            console.log('📹 Setting up camera feed...');
+            console.log('🎥 Configuring camera feed...');
             
-            // Delay untuk memastikan video element sudah ada
             let attempts = 0;
-            let checkCameraInterval = setInterval(function() {
+            const maxAttempts = 50;
+            
+            const configInterval = setInterval(() => {
                 attempts++;
                 const videoEl = document.querySelector('video');
+                const sceneEl = document.querySelector('a-scene');
                 
-                if (videoEl && videoEl.srcObject) {
-                    console.log('✓ Camera feed active');
+                if (videoEl) {
+                    console.log(`✓ Video element found (attempt ${attempts})`);
                     
-                    // Konfigurasi video attributes
+                    // Force video element configuration
+                    videoEl.muted = true;
                     videoEl.setAttribute('playsinline', 'true');
                     videoEl.setAttribute('webkit-playsinline', 'true');
                     videoEl.setAttribute('autoplay', 'true');
                     videoEl.setAttribute('muted', 'true');
-                    videoEl.muted = true;
                     
-                    // Force play
-                    videoEl.play().then(() => {
-                        console.log('✓ Video playing successfully');
-                        clearInterval(checkCameraInterval);
-                    }).catch(e => {
-                        console.warn('⚠ Video play error:', e);
-                        videoEl.muted = true;
-                        videoEl.play().catch(err => console.error('❌ Fatal video play error:', err));
-                    });
-
-                    // Ensure styles are applied
+                    // Apply critical styles
                     applyVideoStyles(videoEl);
-                } else if (attempts > 30) {
-                    console.warn('⚠ Camera not detected after multiple attempts');
-                    clearInterval(checkCameraInterval);
-                } else {
-                    if (attempts % 10 === 0) {
-                        console.log(`⏳ Waiting for camera feed... (${attempts})`);
-                    }
+                    
+                    // Try to play
+                    videoEl.play()
+                        .then(() => {
+                            console.log('✓ Video stream playing!');
+                            clearInterval(configInterval);
+                        })
+                        .catch(err => {
+                            if (attempts % 10 === 0) {
+                                console.warn(`⏳ Video play pending... (${attempts})`);
+                            }
+                        });
+                } else if (attempts > maxAttempts) {
+                    console.error('❌ Video element not found after', maxAttempts, 'attempts');
+                    clearInterval(configInterval);
+                    
+                    // Show error in UI
+                    const uiLayer = document.getElementById('ar-ui-layer');
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = 'position: fixed; bottom: 20px; left: 20px; right: 20px; background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; z-index: 100; font-size: 12px; border-left: 3px solid #dc2626;';
+                    errorDiv.innerHTML = '❌ Gagal memuat feed kamera. Refresh halaman atau coba lagi.';
+                    document.body.appendChild(errorDiv);
                 }
                 
                 window.dispatchEvent(new Event('resize'));
-            }, 200);
+            }, 300);
 
-            // Clear interval setelah 15 detik
-            setTimeout(() => { clearInterval(checkCameraInterval); }, 15000);
+            // Auto cleanup
+            setTimeout(() => { clearInterval(configInterval); }, 20000);
         }
 
         function applyVideoStyles(videoEl) {
@@ -390,7 +438,8 @@
                 'z-index': '0',
                 'display': 'block',
                 'margin': '0',
-                'padding': '0'
+                'padding': '0',
+                'border': 'none'
             };
 
             Object.entries(styles).forEach(([key, value]) => {
