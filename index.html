@@ -2,32 +2,38 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <title>WebAR Menu Kuliner Interaktif - Kelompok 1</title>
     
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.3.0/aframe.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar.js"></script>
     
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
     <script src="https://unpkg.com/aframe-gesture-detector-component@1.0.1/dist/aframe-gesture-detector-component.min.js"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #000; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #000000; }
         
-        /* Memaksa elemen canvas dan video bawaan AR.js berada di background belakang */
-        .a-canvas { position: absolute; top: 0; left: 0; z-index: 1 !important; }
-        video { position: absolute; top: 0; left: 0; z-index: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; }
+        /* Memaksa elemen video kamera buatan AR.js agar merender penuh di layar handphone */
+        video { 
+            position: absolute !important; top: 0 !important; left: 0 !important; 
+            width: 100% !important; height: 100% !important; 
+            object-fit: cover !important; z-index: -5 !important; 
+            display: block !important;
+        }
+        .a-canvas { position: absolute !important; top: 0 !important; left: 0 !important; z-index: -2 !important; }
         
-        /* Lapisan UI Utama */
+        /* Container Lapisan Antarmuka UI */
         #ar-ui-layer {
-            position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+            position: absolute; inset: 0; z-index: 10; display: none; flex-direction: column;
             justify-content: space-between; padding: 16px; box-sizing: border-box; pointer-events: none;
         }
         #ar-ui-layer * { pointer-events: auto; }
 
-        /* Layar Pemicu Izin Kamera Aktif (Anti-Block Browser) */
+        /* Layar Konfirmasi Awal (Mencegah Pemblokiran Otomatis Sandbox Browser iOS) */
         #camera-permission-screen {
-            position: absolute; inset: 0; z-index: 999; background: #111827;
+            position: absolute; inset: 0; z-index: 9999; background: #111827;
             display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white;
         }
         .btn-start-ar {
@@ -50,10 +56,97 @@
         .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; display: inline-block; }
         .btn-refresh { border: none; background: #f3f4f6; padding: 10px; border-radius: 12px; cursor: pointer; }
 
-        /* Panduan Pembidikan */
-        .scan-prompt-box { display: flex; flex-direction: column; align-items: center; text-align: center; color: #ffffff; margin-bottom: 120px; }
+        /* Instructions Modal */
+        #instructions-modal {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 50;
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        #instructions-modal.show { display: flex; }
+        .modal-content {
+            background: #fff; border-radius: 24px; padding: 24px; max-width: 420px;
+            width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-close { float: right; background: none; border: none; font-size: 24px; cursor: pointer; color: #4b5563; }
+        .modal-title { font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 12px 0; }
+        .modal-text { font-size: 14px; color: #4b5563; line-height: 1.6; margin: 0 0 16px 0; }
+        .marker-preview {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;
+        }
+        .marker-item {
+            background: #f3f4f6; padding: 12px; border-radius: 12px; text-align: center;
+            border: 2px solid #e5e7eb;
+        }
+        .marker-item.active { border-color: #f59e0b; background: #fffbeb; }
+        .marker-emoji { font-size: 32px; margin: 8px 0; }
+        .marker-name { font-size: 12px; font-weight: 700; color: #111827; }
+        .btn-close-modal { width: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 700; }
+
+
+        /* Panduan Pembidikan & Targeting Reticle */
+        .scan-prompt-box { display: flex; flex-direction: column; align-items: center; text-align: center; color: #ffffff; margin-bottom: 120px; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
         .scan-target { width: 80px; height: 80px; border: 4px dashed #fbbf24; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 32px; background: rgba(0,0,0,0.4); margin-bottom: 14px; }
         .scan-text { font-size: 14px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 50px; }
+
+        /* Crosshair Targeting di Tengah Layar */
+        #camera-crosshair {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5;
+            width: 120px; height: 120px; pointer-events: none;
+        }
+        .crosshair-circle {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 100%; height: 100%; border: 3px solid rgba(251, 191, 36, 0.5); border-radius: 50%;
+            box-shadow: inset 0 0 20px rgba(251, 191, 36, 0.3);
+        }
+        .crosshair-h, .crosshair-v {
+            position: absolute; background: rgba(251, 191, 36, 0.6);
+        }
+        .crosshair-h { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
+        .crosshair-v { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+        .crosshair-dot {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 8px; height: 8px; background: #fbbf24; border-radius: 50%;
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.8);
+        }
+        #camera-crosshair.detected {
+            animation: pulse 0.6s ease-in-out 3;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.15); }
+        }
+
+        /* Camera Status Indicator */
+        .camera-status-badge {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20;
+            background: rgba(16, 185, 129, 0.9); color: white; padding: 8px 16px;
+            border-radius: 50px; font-size: 12px; font-weight: 700;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            display: none; align-items: center; gap: 8px;
+        }
+        .camera-status-badge.show { display: flex; }
+        .status-pulse {
+            width: 8px; height: 8px; background: #fff; border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Marker Detection Alert */
+        #marker-detected-alert {
+            position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 20;
+            background: linear-gradient(135deg, #10b981, #059669); color: white;
+            padding: 12px 24px; border-radius: 50px; font-weight: 700;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+            display: none; align-items: center; gap: 10px;
+            animation: slideUp 0.4s ease-out;
+        }
+        #marker-detected-alert.show { display: flex; }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
 
         /* Detail Menu Card Pop-up */
         .menu-card {
@@ -67,10 +160,6 @@
         .food-title-text { font-size: 22px; font-weight: 800; color: #111827; margin: 6px 0 0 0; }
         .food-price-badge { font-size: 18px; font-weight: 900; color: #ea580c; background: #fff7ed; padding: 6px 14px; border-radius: 14px; border: 1px solid #ffedd5; }
         .food-description { font-size: 13px; color: #4b5563; line-height: 1.6; margin: 0 0 14px 0; }
-        .meta-info-container { display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; background: #f9fafb; padding: 10px 14px; border-radius: 16px; margin-bottom: 14px; border: 1px solid #f3f4f6; }
-        .ingredients-box { margin-bottom: 18px; }
-        .ingredients-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; }
-        .ingredients-list { font-size: 12px; color: #374151; font-style: italic; margin: 0; }
         .btn-order { width: 100%; border: none; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; font-weight: 700; padding: 15px; font-size: 14px; border-radius: 16px; cursor: pointer; }
     </style>
 </head>
@@ -80,12 +169,31 @@
         <div style="font-size: 50px;">📸</div>
         <h2 style="margin: 15px 0 10px 0; font-size: 22px;">Konfirmasi Akses Kamera</h2>
         <p style="font-size: 14px; color: #9ca3af; max-width: 300px; margin: 0 auto; line-height: 1.5;">
-            Proyek WebAR Kelompok 1 membutuhkan izin kamera untuk memindai menu kuliner secara interaktif.
+            Sistem WebAR Kelompok 1 membutuhkan otorisasi penuh untuk menyalakan sensor kamera belakang *smartphone*.
         </p>
-        <button class="btn-start-ar" onclick="initiateCamera()">Buka Kamera & Mulai AR</button>
+        <button class="btn-start-ar" onclick="initiateARScene()">Mulai Kamera Belakang</button>
     </div>
 
     <div id="ar-ui-layer">
+        <!-- Crosshair Targeting Reticle -->
+        <div id="camera-crosshair">
+            <div class="crosshair-circle"></div>
+            <div class="crosshair-h"></div>
+            <div class="crosshair-v"></div>
+            <div class="crosshair-dot"></div>
+        </div>
+
+        <!-- Camera Status Badge -->
+        <div class="camera-status-badge show">
+            <span class="status-pulse"></span>
+            <span>Kamera Aktif</span>
+        </div>
+
+        <!-- Marker Detected Alert -->
+        <div id="marker-detected-alert">
+            ✓ Menu Terdeteksi! Gulir ke bawah untuk detail
+        </div>
+
         <header class="modern-header">
             <div class="brand-box">
                 <div class="brand-icon">🍽️</div>
@@ -111,124 +219,245 @@
                 <div id="food-price" class="food-price-badge">Rp 0</div>
             </div>
             <p id="food-desc" class="food-description">Deskripsi hidangan kuliner.</p>
-            <div class="meta-info-container">
-                <span id="food-rating">⭐ 0.0</span>
-                <span id="food-calories">🔥 0 Kcal</span>
-                <span id="food-time">⏱️ 0 Menit</span>
-            </div>
-            <div class="ingredients-box">
-                <span class="ingredients-label">Komposisi / Bahan Utama:</span>
-                <p id="food-ingredients" class="ingredients-list">Bahan-bahan.</p>
-            </div>
             <button class="btn-order">Tambahkan ke Keranjang Belanja</button>
         </footer>
     </div>
 
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
-        gesture-detector
-        renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true;"
-    >
-        <a-assets>
-            <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
-            <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
-        </a-assets>
+    <!-- Instructions Modal -->
+    <div id="instructions-modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeInstructions()">✕</button>
+            <h2 class="modal-title">📍 Cara Menggunakan AR Menu</h2>
+            <p class="modal-text"><strong>1. Arahkan kamera ke marker</strong> di Buku Menu fisik untuk menampilkan model 3D interaktif.</p>
+            <p class="modal-text"><strong>2. Geser marker</strong> untuk merotasi dan mengukur model 3D di layar Anda.</p>
+            <p class="modal-text"><strong>3. Pilih menu</strong> dari detail kartu untuk melihat harga dan deskripsi lengkap.</p>
+            
+            <p style="font-size: 13px; color: #4b5563; margin-top: 16px; font-weight: 700;">Marker yang didukung:</p>
+            <div class="marker-preview">
+                <div class="marker-item active">
+                    <div class="marker-emoji">⬜</div>
+                    <div class="marker-name">HIRO Pattern</div>
+                    <div style="font-size: 11px; color: #4b5563; margin-top: 4px;">Nasi Goreng</div>
+                </div>
+                <div class="marker-item">
+                    <div class="marker-emoji">⬜</div>
+                    <div class="marker-name">Kanji Pattern</div>
+                    <div style="font-size: 11px; color: #4b5563; margin-top: 4px;">Es Teh</div>
+                </div>
+            </div>
 
-        <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
-        <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
-        <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+            <p style="font-size: 12px; color: #9ca3af; background: #f3f4f6; padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin: 16px 0;">
+                💡 Tip: Pastikan pencahayaan yang cukup dan marker terlihat jelas di kamera untuk hasil terbaik.
+            </p>
 
-        <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-            <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-        </a-marker>
+            <button class="btn-close-modal" onclick="closeInstructions()">Tutup</button>
+        </div>
+    </div>
 
-        <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-            <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-        </a-marker>
-
-        <a-entity camera></a-entity>
-    </a-scene>
+    <div id="scene-placeholder"></div>
 
     <script>
-        // Fungsi pemicu manual untuk memaksa browser membuka kamera belakang smartphone
-        function initiateCamera() {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            .then(function(stream) {
-                // Sembunyikan layar pemblokir jika izin diberikan
-                document.getElementById('camera-permission-screen').style.display = 'none';
-                
-                // Berikan sedikit stimulasi trigger resize agar kanvas AR.js menyesuaikan layar jendela HP
-                setTimeout(function() {
-                    window.dispatchEvent(new Event('resize'));
-                }, 500);
-            })
-            .catch(function(err) {
-                alert("Gagal mengakses kamera: " + err.message + "\nPastikan pengaturan izin situs di browser Anda telah diaktifkan.");
-            });
+        function initiateARScene() {
+            // 1. Memicu izin sensor gerak iOS jika ada
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().catch(err => console.log(err));
+            }
+
+            // 2. Sembunyikan blocker screen dan tampilkan overlay UI
+            document.getElementById('camera-permission-screen').style.display = 'none';
+            document.getElementById('ar-ui-layer').style.display = 'flex';
+
+            // 3. Suntikkan skrip a-scene AR.js v3.4.7 dengan pengaturan optimalisasi rendering
+            const placeholder = document.getElementById('scene-placeholder');
+            placeholder.innerHTML = `
+                <a-scene 
+                    embedded 
+                    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
+                    gesture-detector
+                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true;"
+                >
+                    <a-assets>
+                        <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
+                        <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
+                    </a-assets>
+
+                    <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
+                    <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
+                    <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+
+                    <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                        <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                    </a-marker>
+
+                    <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                        <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                    </a-marker>
+
+                    <a-entity camera></a-entity>
+                </a-scene>
+            `;
+
+            // 4. Daftarkan event marker
+            initiateMarkerListeners();
+
+            // 5. PENYELAMAT SAFARI: Paksa video stream buatan AR.js agar mematuhi aturan Apple WebKit secara berkala
+            let checkVideoInterval = setInterval(function() {
+                const videoEl = document.querySelector('video');
+                if (videoEl) {
+                    videoEl.setAttribute('playsinline', 'true');
+                    videoEl.setAttribute('webkit-playsinline', 'true');
+                    videoEl.setAttribute('autoplay', 'true');
+                    videoEl.setAttribute('muted', 'true');
+                    videoEl.muted = true;
+                    
+                    // Mainkan paksa video stream-nya
+                    videoEl.play().then(() => {
+                        clearInterval(checkVideoInterval); // Jika sukses berputar, hentikan loop pengecekan
+                    }).catch(e => console.log("Mencoba memutar ulang kamera...", e));
+
+                    // Terapkan CSS agar menempel sempurna di paling belakang
+                    videoEl.style.setProperty('position', 'absolute', 'important');
+                    videoEl.style.setProperty('top', '0', 'important');
+                    videoEl.style.setProperty('left', '0', 'important');
+                    videoEl.style.setProperty('width', '100%', 'important');
+                    videoEl.style.setProperty('height', '100%', 'important');
+                    videoEl.style.setProperty('object-fit', 'cover', 'important');
+                    videoEl.style.setProperty('z-index', '-5', 'important');
+                    videoEl.style.setProperty('display', 'block', 'important');
+                }
+                window.dispatchEvent(new Event('resize'));
+            }, 300);
+
+            // Batasi interval pengecekan hingga maksimal 5 detik agar tidak memakan memori
+            setTimeout(() => { clearInterval(checkVideoInterval); }, 5000);
+
+            // 6. Tampilkan tip after 3 seconds jika belum ada marker terdeteksi
+            setTimeout(() => {
+                if (!document.getElementById('detail-card').classList.contains('active')) {
+                    console.log('Tip: Arahkan kamera ke marker HIRO atau Kanji untuk memulai');
+                }
+            }, 3000);
         }
+
+        function closeInstructions() {
+            document.getElementById('instructions-modal').classList.remove('show');
+        }
+
+        function showInstructions() {
+            document.getElementById('instructions-modal').classList.add('show');
+        }
+
+        // Update header button untuk menampilkan instruksi
+        document.addEventListener('DOMContentLoaded', () => {
+            const refreshBtn = document.querySelector('.btn-refresh');
+            if (refreshBtn) {
+                refreshBtn.innerHTML = 'ℹ️';
+                refreshBtn.onclick = showInstructions;
+            }
+        });
 
         const menuDatabase = {
             'marker-nasgor': {
                 title: 'Nasi Goreng Rempah Spesial',
                 price: 'Rp 25.000',
                 tag: 'Bestseller ⭐',
-                desc: 'Nasi goreng aromatik berlimpah bumbu rempah tradisional, disajikan hangat lengkap dengan topping telur mata sapi, udang segar, suwiran ayam, dan kerupuk udang yang renyah.',
-                rating: '⭐ 4.9 (240+ Ulasan)',
-                calories: '🔥 620 Kcal',
-                time: '⏱️ 10-15 Menit',
-                ingredients: 'Beras Premium, Bumbu Rempah Pilihan, Telur, Udang, Ayam, Kecap Manis Organik.'
+                desc: 'Nasi goreng aromatik berlimpah bumbu rempah tradisional, disajikan hangat lengkap dengan topping telur mata sapi, udang segar, suwiran ayam, dan kerupuk udang yang renyah.'
             },
             'marker-esteh': {
                 title: 'Es Teh Manis Jumbo',
                 price: 'Rp 6.000',
                 tag: 'Segar & Favorit 🥤',
-                desc: 'Seduhan murni dari daun teh melati pilihan berkualitas tinggi, disajikan dingin dengan tingkat kemanisan gula tebu murni yang pas, sangat segar sebagai pelepas dahaga.',
-                rating: '⭐ 4.8 (190+ Ulasan)',
-                calories: '🔥 120 Kcal',
-                time: '⏱️ 3 Menit',
-                ingredients: 'Daun Teh Melati Alami, Air Kristal Es, Gula Tebu Cair Murni.'
+                desc: 'Seduhan murni dari daun teh melati pilihan berkualitas tinggi, disajikan dingin dengan tingkat kemanisan gula tebu murni yang pas, sangat segar sebagai pelepas dahaga.'
             }
         };
 
-        const scanPrompt = document.getElementById('scan-prompt');
-        const detailCard = document.getElementById('detail-card');
-        
-        const uiTitle = document.getElementById('food-title');
-        const uiPrice = document.getElementById('food-price');
-        const uiTag = document.getElementById('food-tag');
-        const uiDesc = document.getElementById('food-desc');
-        const uiRating = document.getElementById('food-rating');
-        const uiCalories = document.getElementById('food-calories');
-        const uiTime = document.getElementById('food-time');
-        const uiIngredients = document.getElementById('food-ingredients');
+        function initiateMarkerListeners() {
+            const scanPrompt = document.getElementById('scan-prompt');
+            const detailCard = document.getElementById('detail-card');
+            const crosshair = document.getElementById('camera-crosshair');
+            const markerAlert = document.getElementById('marker-detected-alert');
+            
+            const uiTitle = document.getElementById('food-title');
+            const uiPrice = document.getElementById('food-price');
+            const uiTag = document.getElementById('food-tag');
+            const uiDesc = document.getElementById('food-desc');
 
-        function onMarkerFound(markerId) {
-            const data = menuDatabase[markerId];
-            if (!data) return;
+            let markerDetectedTimeout;
 
-            uiTitle.innerText = data.title;
-            uiPrice.innerText = data.price;
-            uiTag.innerText = data.tag;
-            uiDesc.innerText = data.desc;
-            uiRating.innerText = data.rating;
-            uiCalories.innerText = data.calories;
-            uiTime.innerText = data.time;
-            uiIngredients.innerText = data.ingredients;
+            function onMarkerFound(markerId) {
+                const data = menuDatabase[markerId];
+                if (!data) return;
 
-            scanPrompt.style.display = 'none';
-            detailCard.classList.add('active');
+                // Update UI dengan data menu
+                uiTitle.innerText = data.title;
+                uiPrice.innerText = data.price;
+                uiTag.innerText = data.tag;
+                uiDesc.innerText = data.desc;
+
+                // Tampilkan crosshair pulse animation
+                crosshair.classList.remove('detected');
+                void crosshair.offsetWidth; // Trigger reflow untuk restart animation
+                crosshair.classList.add('detected');
+
+                // Tampilkan marker detected alert
+                markerAlert.classList.add('show');
+                clearTimeout(markerDetectedTimeout);
+                markerDetectedTimeout = setTimeout(() => {
+                    markerAlert.classList.remove('show');
+                }, 3000);
+
+                // Tampilkan detail card
+                scanPrompt.style.display = 'none';
+                detailCard.classList.add('active');
+
+                // Hapus status camera badge
+                document.querySelector('.camera-status-badge').classList.remove('show');
+
+                // Trigger haptic feedback jika didukung
+                if (navigator.vibrate) {
+                    navigator.vibrate([100, 50, 100]);
+                }
+
+                // Trigger sound effect (opsional)
+                playDetectionSound();
+            }
+
+            function onMarkerLost() {
+                scanPrompt.style.display = 'flex';
+                detailCard.classList.remove('active');
+                crosshair.classList.remove('detected');
+                markerAlert.classList.remove('show');
+                document.querySelector('.camera-status-badge').classList.add('show');
+            }
+
+            document.querySelectorAll('a-marker').forEach(marker => {
+                marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
+                marker.addEventListener('markerLost', () => onMarkerLost());
+            });
         }
 
-        function onMarkerLost() {
-            scanPrompt.style.display = 'flex';
-            detailCard.classList.remove('active');
+        function playDetectionSound() {
+            // Create beep sound menggunakan Web Audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (e) {
+                console.log('Audio feedback not available');
+            }
         }
-
-        document.querySelectorAll('a-marker').forEach(marker => {
-            marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
-            marker.addEventListener('markerLost', () => onMarkerLost());
-        });
     </script>
 </body>
 </html>
