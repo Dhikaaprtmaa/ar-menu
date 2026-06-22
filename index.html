@@ -17,12 +17,29 @@
         
         /* Memaksa elemen video kamera buatan AR.js agar merender penuh di layar handphone */
         video { 
-            position: absolute !important; top: 0 !important; left: 0 !important; 
+            position: fixed !important; top: 0 !important; left: 0 !important; 
             width: 100% !important; height: 100% !important; 
-            object-fit: cover !important; z-index: -5 !important; 
-            display: block !important;
+            object-fit: cover !important; z-index: 0 !important; 
+            display: block !important; margin: 0 !important; padding: 0 !important;
         }
-        .a-canvas { position: absolute !important; top: 0 !important; left: 0 !important; z-index: -2 !important; }
+        canvas { 
+            position: fixed !important; top: 0 !important; left: 0 !important; 
+            width: 100% !important; height: 100% !important; z-index: 1 !important;
+            margin: 0 !important; padding: 0 !important; display: block !important;
+        }
+        .a-canvas { 
+            position: fixed !important; top: 0 !important; left: 0 !important; 
+            width: 100% !important; height: 100% !important; z-index: 1 !important; 
+            margin: 0 !important; padding: 0 !important; display: block !important;
+        }
+        #scene-placeholder {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+        }
+        a-scene {
+            position: fixed !important; top: 0 !important; left: 0 !important; 
+            width: 100% !important; height: 100% !important; z-index: 1 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
         
         /* Container Lapisan Antarmuka UI */
         #ar-ui-layer {
@@ -274,7 +291,9 @@
                     embedded 
                     arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
                     gesture-detector
-                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true;"
+                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: false; precision: mediump;"
+                    vr-mode-ui="enabled: false"
+                    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; z-index: 1;"
                 >
                     <a-assets>
                         <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
@@ -293,50 +312,90 @@
                         <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
                     </a-marker>
 
-                    <a-entity camera></a-entity>
+                    <a-entity camera position="0 0 0"></a-entity>
                 </a-scene>
             `;
 
-            // 4. Daftarkan event marker
-            initiateMarkerListeners();
+            console.log('🎬 AR Scene initialized, waiting for A-Frame to load...');
 
-            // 5. PENYELAMAT SAFARI: Paksa video stream buatan AR.js agar mematuhi aturan Apple WebKit secara berkala
-            let checkVideoInterval = setInterval(function() {
+            // 4. Tunggu sampai A-Frame selesai loading dan kamera siap
+            setTimeout(() => {
+                const sceneEl = document.querySelector('a-scene');
+                if (sceneEl && sceneEl.hasLoaded) {
+                    console.log('✓ A-Frame scene loaded');
+                    initiateMarkerListeners();
+                    setupCameraFeed();
+                } else {
+                    // Coba lagi jika belum siap
+                    setTimeout(initiateARScene.bind(this), 500);
+                }
+            }, 1000);
+        }
+
+        function setupCameraFeed() {
+            console.log('📹 Setting up camera feed...');
+            
+            // Delay untuk memastikan video element sudah ada
+            let attempts = 0;
+            let checkCameraInterval = setInterval(function() {
+                attempts++;
                 const videoEl = document.querySelector('video');
-                if (videoEl) {
+                
+                if (videoEl && videoEl.srcObject) {
+                    console.log('✓ Camera feed active');
+                    
+                    // Konfigurasi video attributes
                     videoEl.setAttribute('playsinline', 'true');
                     videoEl.setAttribute('webkit-playsinline', 'true');
                     videoEl.setAttribute('autoplay', 'true');
                     videoEl.setAttribute('muted', 'true');
                     videoEl.muted = true;
                     
-                    // Mainkan paksa video stream-nya
+                    // Force play
                     videoEl.play().then(() => {
-                        clearInterval(checkVideoInterval); // Jika sukses berputar, hentikan loop pengecekan
-                    }).catch(e => console.log("Mencoba memutar ulang kamera...", e));
+                        console.log('✓ Video playing successfully');
+                        clearInterval(checkCameraInterval);
+                    }).catch(e => {
+                        console.warn('⚠ Video play error:', e);
+                        videoEl.muted = true;
+                        videoEl.play().catch(err => console.error('❌ Fatal video play error:', err));
+                    });
 
-                    // Terapkan CSS agar menempel sempurna di paling belakang
-                    videoEl.style.setProperty('position', 'absolute', 'important');
-                    videoEl.style.setProperty('top', '0', 'important');
-                    videoEl.style.setProperty('left', '0', 'important');
-                    videoEl.style.setProperty('width', '100%', 'important');
-                    videoEl.style.setProperty('height', '100%', 'important');
-                    videoEl.style.setProperty('object-fit', 'cover', 'important');
-                    videoEl.style.setProperty('z-index', '-5', 'important');
-                    videoEl.style.setProperty('display', 'block', 'important');
+                    // Ensure styles are applied
+                    applyVideoStyles(videoEl);
+                } else if (attempts > 30) {
+                    console.warn('⚠ Camera not detected after multiple attempts');
+                    clearInterval(checkCameraInterval);
+                } else {
+                    if (attempts % 10 === 0) {
+                        console.log(`⏳ Waiting for camera feed... (${attempts})`);
+                    }
                 }
+                
                 window.dispatchEvent(new Event('resize'));
-            }, 300);
+            }, 200);
 
-            // Batasi interval pengecekan hingga maksimal 5 detik agar tidak memakan memori
-            setTimeout(() => { clearInterval(checkVideoInterval); }, 5000);
+            // Clear interval setelah 15 detik
+            setTimeout(() => { clearInterval(checkCameraInterval); }, 15000);
+        }
 
-            // 6. Tampilkan tip after 3 seconds jika belum ada marker terdeteksi
-            setTimeout(() => {
-                if (!document.getElementById('detail-card').classList.contains('active')) {
-                    console.log('Tip: Arahkan kamera ke marker HIRO atau Kanji untuk memulai');
-                }
-            }, 3000);
+        function applyVideoStyles(videoEl) {
+            const styles = {
+                'position': 'fixed',
+                'top': '0',
+                'left': '0',
+                'width': '100%',
+                'height': '100%',
+                'object-fit': 'cover',
+                'z-index': '0',
+                'display': 'block',
+                'margin': '0',
+                'padding': '0'
+            };
+
+            Object.entries(styles).forEach(([key, value]) => {
+                videoEl.style.setProperty(key, value, 'important');
+            });
         }
 
         function closeInstructions() {
