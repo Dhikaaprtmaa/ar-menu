@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebAR Menu Kuliner Interaktif - Kelompok 1</title>
+    
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://unpkg.com/aframe-gesture-detector-component@1.0.1/dist/aframe-gesture-detector-component.min.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #000; }
+        
+        /* Memaksa elemen canvas dan video bawaan AR.js berada di background belakang */
+        .a-canvas { position: absolute; top: 0; left: 0; z-index: 1 !important; }
+        video { position: absolute; top: 0; left: 0; z-index: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; }
+        
+        /* Lapisan UI Utama */
+        #ar-ui-layer {
+            position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 16px; box-sizing: border-box; pointer-events: none;
+        }
+        #ar-ui-layer * { pointer-events: auto; }
+
+        /* Layar Pemicu Izin Kamera Aktif (Anti-Block Browser) */
+        #camera-permission-screen {
+            position: absolute; inset: 0; z-index: 999; background: #111827;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white;
+        }
+        .btn-start-ar {
+            background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; border: none;
+            padding: 16px 32px; font-size: 16px; font-weight: 700; border-radius: 16px; cursor: pointer;
+            box-shadow: 0 10px 25px rgba(234, 88, 12, 0.4); margin-top: 20px;
+        }
+
+        /* Top Bar Header Glassmorphism */
+        .modern-header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 12px 16px; border-radius: 22px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            width: 100%; max-width: 420px; margin: 0 auto; box-sizing: border-box;
+        }
+        .brand-box { display: flex; align-items: center; gap: 12px; }
+        .brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b, #ea580c); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .brand-title { font-size: 14px; font-weight: 800; color: #111827; margin: 0; }
+        .brand-sub { font-size: 11px; color: #4b5563; margin: 2px 0 0 0; display: flex; align-items: center; gap: 5px; }
+        .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; display: inline-block; }
+        .btn-refresh { border: none; background: #f3f4f6; padding: 10px; border-radius: 12px; cursor: pointer; }
+
+        /* Panduan Pembidikan */
+        .scan-prompt-box { display: flex; flex-direction: column; align-items: center; text-align: center; color: #ffffff; margin-bottom: 120px; }
+        .scan-target { width: 80px; height: 80px; border: 4px dashed #fbbf24; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 32px; background: rgba(0,0,0,0.4); margin-bottom: 14px; }
+        .scan-text { font-size: 14px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 50px; }
+
+        /* Detail Menu Card Pop-up */
+        .menu-card {
+            background: #ffffff; padding: 22px; border-radius: 32px; box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            width: 100%; max-width: 420px; margin: 0 auto 5px auto; box-sizing: border-box;
+            transform: translateY(40px); opacity: 0; transition: all 0.4s ease; display: none;
+        }
+        .menu-card.active { display: block; transform: translateY(0); opacity: 1; }
+        .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .tag-recommendation { background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 50px; text-transform: uppercase; }
+        .food-title-text { font-size: 22px; font-weight: 800; color: #111827; margin: 6px 0 0 0; }
+        .food-price-badge { font-size: 18px; font-weight: 900; color: #ea580c; background: #fff7ed; padding: 6px 14px; border-radius: 14px; border: 1px solid #ffedd5; }
+        .food-description { font-size: 13px; color: #4b5563; line-height: 1.6; margin: 0 0 14px 0; }
+        .meta-info-container { display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; background: #f9fafb; padding: 10px 14px; border-radius: 16px; margin-bottom: 14px; border: 1px solid #f3f4f6; }
+        .ingredients-box { margin-bottom: 18px; }
+        .ingredients-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; }
+        .ingredients-list { font-size: 12px; color: #374151; font-style: italic; margin: 0; }
+        .btn-order { width: 100%; border: none; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; font-weight: 700; padding: 15px; font-size: 14px; border-radius: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="camera-permission-screen">
+        <div style="font-size: 50px;">📸</div>
+        <h2 style="margin: 15px 0 10px 0; font-size: 22px;">Konfirmasi Akses Kamera</h2>
+        <p style="font-size: 14px; color: #9ca3af; max-width: 300px; margin: 0 auto; line-height: 1.5;">
+            Proyek WebAR Kelompok 1 membutuhkan izin kamera untuk memindai menu kuliner secara interaktif.
+        </p>
+        <button class="btn-start-ar" onclick="initiateCamera()">Buka Kamera & Mulai AR</button>
+    </div>
+
+    <div id="ar-ui-layer">
+        <header class="modern-header">
+            <div class="brand-box">
+                <div class="brand-icon">🍽️</div>
+                <div>
+                    <h1 class="brand-title">Interactive AR Menu</h1>
+                    <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - WebAR PBR</p>
+                </div>
+            </div>
+            <button onclick="window.location.reload()" class="btn-refresh">🔄</button>
+        </header>
+
+        <div id="scan-prompt" class="scan-prompt-box">
+            <div class="scan-target">📸</div>
+            <p class="scan-text">Arahkan kamera ke gambar di Buku Menu</p>
+        </div>
+
+        <footer id="detail-card" class="menu-card">
+            <div class="card-header-row">
+                <div>
+                    <span id="food-tag" class="tag-recommendation">Kategori</span>
+                    <h2 id="food-title" class="food-title-text">Nama Menu</h2>
+                </div>
+                <div id="food-price" class="food-price-badge">Rp 0</div>
+            </div>
+            <p id="food-desc" class="food-description">Deskripsi hidangan kuliner.</p>
+            <div class="meta-info-container">
+                <span id="food-rating">⭐ 0.0</span>
+                <span id="food-calories">🔥 0 Kcal</span>
+                <span id="food-time">⏱️ 0 Menit</span>
+            </div>
+            <div class="ingredients-box">
+                <span class="ingredients-label">Komposisi / Bahan Utama:</span>
+                <p id="food-ingredients" class="ingredients-list">Bahan-bahan.</p>
+            </div>
+            <button class="btn-order">Tambahkan ke Keranjang Belanja</button>
+        </footer>
+    </div>
+
+    <a-scene 
+        embedded 
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
+        gesture-detector
+        renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true;"
+    >
+        <a-assets>
+            <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
+            <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
+        </a-assets>
+
+        <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
+        <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
+        <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+
+        <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+            <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+        </a-marker>
+
+        <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+            <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+        </a-marker>
+
+        <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+        // Fungsi pemicu manual untuk memaksa browser membuka kamera belakang smartphone
+        function initiateCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(function(stream) {
+                // Sembunyikan layar pemblokir jika izin diberikan
+                document.getElementById('camera-permission-screen').style.display = 'none';
+                
+                // Berikan sedikit stimulasi trigger resize agar kanvas AR.js menyesuaikan layar jendela HP
+                setTimeout(function() {
+                    window.dispatchEvent(new Event('resize'));
+                }, 500);
+            })
+            .catch(function(err) {
+                alert("Gagal mengakses kamera: " + err.message + "\nPastikan pengaturan izin situs di browser Anda telah diaktifkan.");
+            });
+        }
+
+        const menuDatabase = {
+            'marker-nasgor': {
+                title: 'Nasi Goreng Rempah Spesial',
+                price: 'Rp 25.000',
+                tag: 'Bestseller ⭐',
+                desc: 'Nasi goreng aromatik berlimpah bumbu rempah tradisional, disajikan hangat lengkap dengan topping telur mata sapi, udang segar, suwiran ayam, dan kerupuk udang yang renyah.',
+                rating: '⭐ 4.9 (240+ Ulasan)',
+                calories: '🔥 620 Kcal',
+                time: '⏱️ 10-15 Menit',
+                ingredients: 'Beras Premium, Bumbu Rempah Pilihan, Telur, Udang, Ayam, Kecap Manis Organik.'
+            },
+            'marker-esteh': {
+                title: 'Es Teh Manis Jumbo',
+                price: 'Rp 6.000',
+                tag: 'Segar & Favorit 🥤',
+                desc: 'Seduhan murni dari daun teh melati pilihan berkualitas tinggi, disajikan dingin dengan tingkat kemanisan gula tebu murni yang pas, sangat segar sebagai pelepas dahaga.',
+                rating: '⭐ 4.8 (190+ Ulasan)',
+                calories: '🔥 120 Kcal',
+                time: '⏱️ 3 Menit',
+                ingredients: 'Daun Teh Melati Alami, Air Kristal Es, Gula Tebu Cair Murni.'
+            }
+        };
+
+        const scanPrompt = document.getElementById('scan-prompt');
+        const detailCard = document.getElementById('detail-card');
+        
+        const uiTitle = document.getElementById('food-title');
+        const uiPrice = document.getElementById('food-price');
+        const uiTag = document.getElementById('food-tag');
+        const uiDesc = document.getElementById('food-desc');
+        const uiRating = document.getElementById('food-rating');
+        const uiCalories = document.getElementById('food-calories');
+        const uiTime = document.getElementById('food-time');
+        const uiIngredients = document.getElementById('food-ingredients');
+
+        function onMarkerFound(markerId) {
+            const data = menuDatabase[markerId];
+            if (!data) return;
+
+            uiTitle.innerText = data.title;
+            uiPrice.innerText = data.price;
+            uiTag.innerText = data.tag;
+            uiDesc.innerText = data.desc;
+            uiRating.innerText = data.rating;
+            uiCalories.innerText = data.calories;
+            uiTime.innerText = data.time;
+            uiIngredients.innerText = data.ingredients;
+
+            scanPrompt.style.display = 'none';
+            detailCard.classList.add('active');
+        }
+
+        function onMarkerLost() {
+            scanPrompt.style.display = 'flex';
+            detailCard.classList.remove('active');
+        }
+
+        document.querySelectorAll('a-marker').forEach(marker => {
+            marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
+            marker.addEventListener('markerLost', () => onMarkerLost());
+        });
+    </script>
+</body>
+</html>
