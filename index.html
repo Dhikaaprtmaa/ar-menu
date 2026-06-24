@@ -6,125 +6,22 @@
     <title>WebAR Menu Kuliner Interaktif - Kelompok 1</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.3.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <script src="https://unpkg.com/aframe-gesture-detector-component@1.0.1/dist/aframe-gesture-detector-component.min.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/dist/gesture-handler.js"></script>
 
-    <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #000000; }
-        
-        /* SOLUSI UTAMA: Video Tag Native HTML5 ditaruh di tumpukan paling bawah */
-        #webcam-video-stream {
-            position: fixed !important; top: 0 !important; left: 0 !important; 
-            width: 100% !important; height: 100% !important; 
-            object-fit: cover !important; z-index: -20 !important; 
-            display: none; margin: 0 !important; padding: 0 !important;
-        }
-        
-        /* Kanvas WebGL A-Frame dibuat transparan sempurna agar video di bawahnya tembus pandang */
-        .a-canvas { 
-            position: fixed !important; top: 0 !important; left: 0 !important; 
-            width: 100% !important; height: 100% !important; z-index: -10 !important; 
-            background: transparent !important;
-        }
-        
-        #scene-placeholder {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -15;
-        }
-        
-        /* Overlay UI Layer di posisi paling depan */
-        #ar-ui-layer {
-            position: absolute; inset: 0; z-index: 10; display: none; flex-direction: column;
-            justify-content: space-between; padding: 16px; box-sizing: border-box; pointer-events: none;
-        }
-        #ar-ui-layer * { pointer-events: auto; }
-
-        /* Layar Awal Pemicu Kamera */
-        #camera-permission-screen {
-            position: absolute; inset: 0; z-index: 9999; background: #111827;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white;
-        }
-        .btn-start-ar {
-            background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; border: none;
-            padding: 16px 32px; font-size: 16px; font-weight: 700; border-radius: 16px; cursor: pointer;
-            box-shadow: 0 10px 25px rgba(234, 88, 12, 0.4); margin-top: 20px;
-        }
-
-        /* UI Elements */
-        .modern-header {
-            display: flex; justify-content: space-between; align-items: center;
-            background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 12px 16px; border-radius: 22px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-            width: 100%; max-width: 420px; margin: 0 auto; box-sizing: border-box;
-        }
-        .brand-box { display: flex; align-items: center; gap: 12px; }
-        .brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b, #ea580c); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-        .brand-title { font-size: 14px; font-weight: 800; color: #111827; margin: 0; }
-        .brand-sub { font-size: 11px; color: #4b5563; margin: 2px 0 0 0; display: flex; align-items: center; gap: 5px; }
-        .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; display: inline-block; }
-        .btn-refresh { border: none; background: #f3f4f6; padding: 10px; border-radius: 12px; cursor: pointer; }
-
-        #instructions-modal {
-            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 50;
-            display: none; align-items: center; justify-content: center; padding: 20px;
-        }
-        #instructions-modal.show { display: flex; }
-        .modal-content { background: #fff; border-radius: 24px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .modal-close { float: right; background: none; border: none; font-size: 24px; cursor: pointer; color: #4b5563; }
-        .modal-title { font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 12px 0; }
-        .modal-text { font-size: 14px; color: #4b5563; line-height: 1.6; margin: 0 0 16px 0; }
-        .marker-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
-        .marker-item { background: #f3f4f6; padding: 12px; border-radius: 12px; text-align: center; border: 2px solid #e5e7eb; }
-        .marker-item.active { border-color: #f59e0b; background: #fffbeb; }
-        .marker-emoji { font-size: 32px; margin: 8px 0; }
-        .marker-name { font-size: 12px; font-weight: 700; color: #111827; }
-        .btn-close-modal { width: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 700; }
-
-        .scan-prompt-box { display: flex; flex-direction: column; align-items: center; text-align: center; color: #ffffff; margin-bottom: 120px; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
-        .scan-target { width: 80px; height: 80px; border: 4px dashed #fbbf24; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 32px; background: rgba(0,0,0,0.4); margin-bottom: 14px; }
-        .scan-text { font-size: 14px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 50px; }
-
-        #camera-crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; width: 120px; height: 120px; pointer-events: none; }
-        .crosshair-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; border: 3px solid rgba(251, 191, 36, 0.5); border-radius: 50%; box-shadow: inset 0 0 20px rgba(251, 191, 36, 0.3); }
-        .crosshair-h, .crosshair-v { position: absolute; background: rgba(251, 191, 36, 0.6); }
-        .crosshair-h { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
-        .crosshair-v { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
-        .crosshair-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #fbbf24; border-radius: 50%; box-shadow: 0 0 12px rgba(251, 191, 36, 0.8); }
-        
-        #camera-crosshair.detected { animation: pulse 0.6s ease-in-out 3; }
-        @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.15); } }
-
-        .camera-status-badge { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(16, 185, 129, 0.9); color: white; padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); display: none; align-items: center; gap: 8px; }
-        .camera-status-badge.show { display: flex; }
-        .status-pulse { width: 8px; height: 8px; background: #fff; border-radius: 50%; animation: blink 1s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-        #marker-detected-alert { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 20; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 700; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); display: none; align-items: center; gap: 10px; animation: slideUp 0.4s ease-out; }
-        #marker-detected-alert.show { display: flex; }
-        @keyframes slideUp { from { transform: translateX(-50%) translateY(100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
-
-        .menu-card { background: #ffffff; padding: 22px; border-radius: 32px; box-shadow: 0 25px 50px rgba(0,0,0,0.3); width: 100%; max-width: 420px; margin: 0 auto 5px auto; box-sizing: border-box; transform: translateY(40px); opacity: 0; transition: all 0.4s ease; display: none; }
-        .menu-card.active { display: block; transform: translateY(0); opacity: 1; }
-        .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-        .tag-recommendation { background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 50px; text-transform: uppercase; }
-        .food-title-text { font-size: 22px; font-weight: 800; color: #111827; margin: 6px 0 0 0; }
-        .food-price-badge { font-size: 18px; font-weight: 900; color: #ea580c; background: #fff7ed; padding: 6px 14px; border-radius: 14px; border: 1px solid #ffedd5; }
-        .food-description { font-size: 13px; color: #4b5563; line-height: 1.6; margin: 0 0 14px 0; }
-        .btn-order { width: 100%; border: none; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; font-weight: 700; padding: 15px; font-size: 14px; border-radius: 16px; cursor: pointer; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body>
-
-    <video id="webcam-video-stream" autoplay muted playsinline webkit-playsinline></video>
+<body style="margin: 0px; overflow: hidden;">
 
     <div id="camera-permission-screen">
         <div style="font-size: 50px;">📸</div>
         <h2 style="margin: 15px 0 10px 0; font-size: 22px;">Konfirmasi Akses Kamera</h2>
         <p style="font-size: 14px; color: #9ca3af; max-width: 300px; margin: 0 auto; line-height: 1.5;">
-            Sistem WebAR Kelompok 1 membutuhkan otorisasi penuh untuk menyalakan sensor kamera belakang *smartphone*.
+            Sistem WebAR Kelompok 1 membutuhkan otorisasi penuh untuk menyalakan sensor kamera belakang smartphone.
         </p>
-        <button class="btn-start-ar" onclick="startHardwareCamera()">Mulai Kamera Belakang</button>
+        <button class="btn-start-ar" onclick="initiateARFramework()">Mulai Kamera Belakang</button>
     </div>
 
     <div id="ar-ui-layer">
@@ -149,7 +46,7 @@
                 <div class="brand-icon">🍽️</div>
                 <div>
                     <h1 class="brand-title">Interactive AR Menu</h1>
-                    <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - WebAR PBR</p>
+                    <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - WebAR</p>
                 </div>
             </div>
             <button class="btn-refresh">ℹ️</button>
@@ -157,7 +54,7 @@
 
         <div id="scan-prompt" class="scan-prompt-box">
             <div class="scan-target">📸</div>
-            <p class="scan-text">Arahkan kamera ke gambar di Buku Menu</p>
+            <p class="scan-text">Arahkan kamera ke gambar Barcode di Buku Menu</p>
         </div>
 
         <footer id="detail-card" class="menu-card">
@@ -177,90 +74,74 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeInstructions()">✕</button>
             <h2 class="modal-title">📍 Cara Menggunakan AR Menu</h2>
-            <p class="modal-text"><strong>1. Arahkan kamera</strong> ke marker fisik untuk memunculkan model makanan 3D secara interaktif.</p>
-            <p class="modal-text"><strong>2. Sentuh & Geser</strong> objek 3D di layar untuk melakukan rotasi atau mengubah skala ukuran.</p>
+            <p class="modal-text"><strong>1. Arahkan kamera</strong> ke marker barcode matrix untuk memunculkan model makanan 3D secara interaktif.</p>
+            <p class="modal-text"><strong>2. Gunakan 2 Jari</strong> di layar untuk memperbesar/memperkecil (*pinch*) atau memutar objek 3D (*rotate*).</p>
             <button class="btn-close-modal" onclick="closeInstructions()">Saya Mengerti</button>
         </div>
     </div>
 
-    <div id="scene-placeholder"></div>
+    <div id="scene-container" style="display: none;">
+        <a-scene 
+            embedded 
+            arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" 
+            renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true;"
+            vr-mode-ui="enabled: false"
+        >
+            <a-assets>
+                <a-asset-item id="burger-model" src="assets/Beef Burger.glb"></a-asset-item>
+                <a-asset-item id="bakso-model" src="assets/mangkuk_bakso__mie_ayam.glb"></a-asset-item>
+                <a-asset-item id="sate-model" src="assets/sate_makanan_khas_indonesia.glb"></a-asset-item>
+                <a-asset-item id="paket-model" src="assets/paket-1.glb"></a-asset-item>
+            </a-assets>
+
+            <a-entity light="type: ambient; intensity: 1.2; color: #ffffff;"></a-entity>
+            <a-entity light="type: directional; intensity: 1.5; color: #fff7ee;" position="2 4 3"></a-entity>
+
+            <a-marker type="barcode" value="0" id="marker-burger" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                <a-entity gltf-model="#burger-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler></a-entity>
+            </a-marker>
+
+            <a-marker type="barcode" value="1" id="marker-bakso" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                <a-entity gltf-model="#bakso-model" position="0 0 0" scale="0.8 0.8 0.8" class="clickable" gesture-handler></a-entity>
+            </a-marker>
+
+            <a-marker type="barcode" value="2" id="marker-sate" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                <a-entity gltf-model="#sate-model" position="0 0 0" scale="0.7 0.7 0.7" class="clickable" gesture-handler></a-entity>
+            </a-marker>
+
+            <a-marker type="barcode" value="3" id="marker-paket" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                <a-entity gltf-model="#paket-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler></a-entity>
+            </a-marker>
+
+            <a-entity camera></a-entity>
+        </a-scene>
+    </div>
 
     <script>
-        function startHardwareCamera() {
-            // Memicu sensor gerak gyro iOS jika ada
+        const menuDatabase = {
+            'marker-burger': { title: 'Premium Beef Burger', price: 'Rp 38.000', tag: 'Bestseller 🍔', desc: 'Burger sapi premium dengan daging juicy yang tebal, keju cheddar meleleh, selada segar, dan saus racikan spesial.' },
+            'marker-bakso': { title: 'Bakso & Mie Ayam', price: 'Rp 22.000', tag: 'Rekomendasi 🍜', desc: 'Mie ayam klasik dengan potongan daging ayam manis melimpah ditambah semangkuk bakso urat hangat berkuah kaldu gurih.' },
+            'marker-sate': { title: 'Sate Khas Indonesia', price: 'Rp 28.000', tag: 'Menu Tradisional 🍢', desc: 'Daging pilihan yang dibakar di atas arang tradisional, disajikan dengan lumuran bumbu kacang kental yang gurih.' },
+            'marker-paket': { title: 'Paket Puas Makan Siang', price: 'Rp 45.000', tag: 'Paling Hemat 🍱', desc: 'Kombinasi hidangan makan siang lengkap, porsi mengenyangkan yang dipaketkan khusus lengkap dengan minuman segar.' }
+        };
+
+        function initiateARFramework() {
+            // Memicu izin orientasi perangkat untuk iOS/Android modern
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().catch(err => console.warn(err));
             }
 
-            const nativeVideo = document.getElementById('webcam-video-stream');
-
-            // PAKSA JAVASCRIPT NATIVE MEMINTA AKSES LENSA KAMERA BELAKANG
-            navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                audio: false
-            })
-            .then(function(stream) {
-                // Alirkan data kamera ke elemen video HTML5 murni
-                nativeVideo.srcObject = stream;
-                nativeVideo.style.display = 'block';
-                nativeVideo.play().then(() => {
-                    console.log("✓ Kamera device berhasil menyala dan memancarkan gambar.");
-                    
-                    // Setelah kamera dipastikan menyala, barulah panggil panggung AR.js
-                    injectARSceneFramework();
-                }).catch(err => alert("Gagal memutar aliran video: " + err.message));
-            })
-            .catch(function(error) {
-                console.error("Akses kamera ditolak oleh browser:", error);
-                alert("Gagal memicu kamera native browser: " + error.name + "\nPastikan Anda menekan tombol 'Izinkan/Allow' saat konfirmasi keamanan browser muncul.");
-            });
-        }
-
-        function injectARSceneFramework() {
-            // Sembunyikan blocker awal dan buka overlay UI instan
             document.getElementById('camera-permission-screen').style.display = 'none';
             document.getElementById('ar-ui-layer').style.display = 'flex';
+            
+            // Tampilkan container scene
+            const container = document.getElementById('scene-container');
+            container.style.display = 'block';
 
-            // SUNTIKKAN SCENE: Ubah sourceType menjadi 'video' dan arahkan jalurnya ke id video native kita (#webcam-video-stream)
-            const placeholder = document.getElementById('scene-placeholder');
-            placeholder.innerHTML = `
-                <a-scene 
-                    embedded 
-                    arjs="sourceType: video; sourceWebcam: #webcam-video-stream; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
-                    gesture-detector
-                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true; precision: mediump;"
-                    vr-mode-ui="enabled: false"
-                >
-                    <a-assets>
-                        <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
-                        <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
-                    </a-assets>
+            // Resize window paksa agar komponen video AR.js melakukan kalkulasi ulang dimensi kamera
+            window.dispatchEvent(new Event('resize'));
 
-                    <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
-                    <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
-                    <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
-
-                    <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                    </a-marker>
-
-                    <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                        <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                    </a-marker>
-
-                    <a-entity camera position="0 0 0"></a-entity>
-                </a-scene>
-            `;
-
-            // Pasang pendengar marker dan micu kalkulasi ulang ukuran tampilan layar
             initiateMarkerListeners();
-            setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-            }, 800);
         }
 
         function closeInstructions() { document.getElementById('instructions-modal').classList.remove('show'); }
@@ -270,21 +151,6 @@
             const refreshBtn = document.querySelector('.btn-refresh');
             if (refreshBtn) { refreshBtn.onclick = showInstructions; }
         });
-
-        const menuDatabase = {
-            'marker-nasgor': {
-                title: 'Nasi Goreng Rempah Spesial',
-                price: 'Rp 25.000',
-                tag: 'Bestseller ⭐',
-                desc: 'Nasi goreng aromatik berlimpah bumbu rempah tradisional, disajikan hangat lengkap dengan topping telur mata sapi, udang segar, suwiran ayam, dan kerupuk udang yang renyah.'
-            },
-            'marker-esteh': {
-                title: 'Es Teh Manis Jumbo',
-                price: 'Rp 6.000',
-                tag: 'Segar & Favorit 🥤',
-                desc: 'Seduhan murni dari daun teh melati pilihan berkualitas tinggi, disajikan dingin dengan tingkat kemanisan gula tebu murni yang pas, sangat segar sebagai pelepas dahaga.'
-            }
-        };
 
         function initiateMarkerListeners() {
             const scanPrompt = document.getElementById('scan-prompt');
@@ -330,13 +196,16 @@
                 document.querySelector('.camera-status-badge').classList.add('show');
             }
 
-            // Delegasi listener menunggu elemen diinjeksikan secara penuh di DOM
-            setTimeout(() => {
-                document.querySelectorAll('a-marker').forEach(marker => {
-                    marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
-                    marker.addEventListener('markerLost', () => onMarkerLost());
+            // Memastikan listener dipasang dengan aman setelah scene siap
+            const scene = document.querySelector('a-scene');
+            if (scene) {
+                scene.addEventListener('loaded', () => {
+                    document.querySelectorAll('a-marker').forEach(marker => {
+                        marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
+                        marker.addEventListener('markerLost', () => onMarkerLost());
+                    });
                 });
-            }, 2000);
+            }
         }
 
         function playDetectionSound() {
@@ -346,12 +215,12 @@
                 const gain = audioContext.createGain();
                 oscillator.connect(gain);
                 gain.connect(audioContext.destination);
-                oscillator.frequency.value = 850;
+                oscillator.frequency.value = 900;
                 oscillator.type = 'sine';
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
                 oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.2);
+                oscillator.stop(audioContext.currentTime + 0.15);
             } catch (e) { console.log('Audio feedback error'); }
         }
     </script>
