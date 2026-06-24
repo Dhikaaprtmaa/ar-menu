@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <title>WebAR Menu Kuliner Interaktif - Kelompok 1</title>
+    <title>WebAR Menu Kuliner Interaktif - UAS Grafika Komputer</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.3.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://unpkg.com/aframe-gesture-detector-component@1.0.1/dist/aframe-gesture-detector-component.min.js"></script>
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/dist/gesture-handler.js"></script>
 
     <link rel="stylesheet" href="style.css">
@@ -16,12 +17,12 @@
 <body style="margin: 0px; overflow: hidden;">
 
     <div id="camera-permission-screen">
-        <div style="font-size: 50px;">📸</div>
-        <h2 style="margin: 15px 0 10px 0; font-size: 22px;">Konfirmasi Akses Kamera</h2>
-        <p style="font-size: 14px; color: #9ca3af; max-width: 300px; margin: 0 auto; line-height: 1.5;">
-            Sistem WebAR Kelompok 1 membutuhkan otorisasi penuh untuk menyalakan sensor kamera belakang smartphone.
+        <div id="loading-icon" class="spin-anim">⏳</div>
+        <h2 id="permission-title">Memuat Aset 3D...</h2>
+        <p id="permission-desc">
+            Sistem sedang melakukan *parsing* geometri model `.glb`. Harap tunggu sebentar...
         </p>
-        <button class="btn-start-ar" onclick="initiateARFramework()">Mulai Kamera Belakang</button>
+        <button id="btn-start" class="btn-start-ar" onclick="initiateARFramework()">Mulai Kamera AR</button>
     </div>
 
     <div id="ar-ui-layer">
@@ -34,19 +35,17 @@
 
         <div class="camera-status-badge show">
             <span class="status-pulse"></span>
-            <span>Kamera Aktif</span>
+            <span>Sensor Kamera Aktif</span>
         </div>
 
-        <div id="marker-detected-alert">
-            ✓ Menu Terdeteksi! Silakan lihat detail di bawah
-        </div>
+        <div id="marker-detected-alert">✓ Marker Terbaca! Menampilkan Geometri 3D</div>
 
         <header class="modern-header">
             <div class="brand-box">
                 <div class="brand-icon">🍽️</div>
                 <div>
-                    <h1 class="brand-title">Interactive AR Menu</h1>
-                    <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - WebAR</p>
+                    <h1 class="brand-title">AR Menu Presenter</h1>
+                    <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - UAS Grafika</p>
                 </div>
             </div>
             <button class="btn-refresh">ℹ️</button>
@@ -54,7 +53,7 @@
 
         <div id="scan-prompt" class="scan-prompt-box">
             <div class="scan-target">📸</div>
-            <p class="scan-text">Arahkan kamera ke gambar Barcode di Buku Menu</p>
+            <p class="scan-text">Sorot Barcode Matrix (0, 1, 2, atau 3) di Buku Menu</p>
         </div>
 
         <footer id="detail-card" class="menu-card">
@@ -65,82 +64,98 @@
                 </div>
                 <div id="food-price" class="food-price-badge">Rp 0</div>
             </div>
-            <p id="food-desc" class="food-description">Deskripsi hidangan kuliner.</p>
-            <button class="btn-order">Tambahkan ke Keranjang Belanja</button>
+            <p id="food-desc" class="food-description">Deskripsi</p>
+            <button class="btn-order">Simpan ke Pesanan</button>
         </footer>
     </div>
 
     <div id="instructions-modal">
         <div class="modal-content">
             <button class="modal-close" onclick="closeInstructions()">✕</button>
-            <h2 class="modal-title">📍 Cara Menggunakan AR Menu</h2>
-            <p class="modal-text"><strong>1. Arahkan kamera</strong> ke marker barcode matrix untuk memunculkan model makanan 3D secara interaktif.</p>
-            <p class="modal-text"><strong>2. Gunakan 2 Jari</strong> di layar untuk memperbesar/memperkecil (*pinch*) atau memutar objek 3D (*rotate*).</p>
-            <button class="btn-close-modal" onclick="closeInstructions()">Saya Mengerti</button>
+            <h2 class="modal-title">📍 Panduan Interaksi AR</h2>
+            <p class="modal-text"><strong>1. Deteksi:</strong> Arahkan kamera ke marker Barcode Matrix 3x3.</p>
+            <p class="modal-text"><strong>2. Rotasi (Y-Axis):</strong> Geser (*drag*) objek 3D menggunakan 1 jari.</p>
+            <p class="modal-text"><strong>3. Skala (Zoom):</strong> Gunakan gerakan mencubit (*pinch*) dengan 2 jari.</p>
+            <button class="btn-close-modal" onclick="closeInstructions()">Mulai Eksplorasi</button>
         </div>
     </div>
 
-    <div id="scene-container" style="display: none;">
+    <div id="scene-container">
         <a-scene 
             embedded 
             arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" 
+            gesture-detector
             renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true;"
             vr-mode-ui="enabled: false"
         >
-            <a-assets>
-                <a-asset-item id="burger-model" src="assets/Beef Burger.glb"></a-asset-item>
-                <a-asset-item id="bakso-model" src="assets/mangkuk_bakso__mie_ayam.glb"></a-asset-item>
-                <a-asset-item id="sate-model" src="assets/sate_makanan_khas_indonesia.glb"></a-asset-item>
-                <a-asset-item id="paket-model" src="assets/paket-1.glb"></a-asset-item>
+            <a-assets id="assets-library">
+                <a-asset-item id="burger-model" src="Beef%20Burger.glb"></a-asset-item>
+                <a-asset-item id="bakso-model" src="mangkuk_bakso__mie_ayam.glb"></a-asset-item>
+                <a-asset-item id="sate-model" src="sate_makanan_khas_indonesia.glb"></a-asset-item>
+                <a-asset-item id="paket-model" src="paket-1.glb"></a-asset-item>
             </a-assets>
 
             <a-entity light="type: ambient; intensity: 1.2; color: #ffffff;"></a-entity>
-            <a-entity light="type: directional; intensity: 1.5; color: #fff7ee;" position="2 4 3"></a-entity>
+            <a-entity light="type: directional; intensity: 1.5; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
 
-            <a-marker type="barcode" value="0" id="marker-burger" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                <a-entity gltf-model="#burger-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler></a-entity>
+            <a-entity camera cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable"></a-entity>
+
+            <a-marker type="barcode" value="0" id="marker-burger">
+                <a-entity gltf-model="#burger-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler="minScale: 0.2; maxScale: 3;"></a-entity>
             </a-marker>
 
-            <a-marker type="barcode" value="1" id="marker-bakso" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                <a-entity gltf-model="#bakso-model" position="0 0 0" scale="0.8 0.8 0.8" class="clickable" gesture-handler></a-entity>
+            <a-marker type="barcode" value="1" id="marker-bakso">
+                <a-entity gltf-model="#bakso-model" position="0 0 0" scale="0.8 0.8 0.8" class="clickable" gesture-handler="minScale: 0.2; maxScale: 3;"></a-entity>
             </a-marker>
 
-            <a-marker type="barcode" value="2" id="marker-sate" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                <a-entity gltf-model="#sate-model" position="0 0 0" scale="0.7 0.7 0.7" class="clickable" gesture-handler></a-entity>
+            <a-marker type="barcode" value="2" id="marker-sate">
+                <a-entity gltf-model="#sate-model" position="0 0 0" scale="0.7 0.7 0.7" class="clickable" gesture-handler="minScale: 0.2; maxScale: 3;"></a-entity>
             </a-marker>
 
-            <a-marker type="barcode" value="3" id="marker-paket" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                <a-entity gltf-model="#paket-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler></a-entity>
+            <a-marker type="barcode" value="3" id="marker-paket">
+                <a-entity gltf-model="#paket-model" position="0 0 0" scale="1 1 1" class="clickable" gesture-handler="minScale: 0.2; maxScale: 3;"></a-entity>
             </a-marker>
-
-            <a-entity camera></a-entity>
         </a-scene>
     </div>
 
     <script>
         const menuDatabase = {
-            'marker-burger': { title: 'Premium Beef Burger', price: 'Rp 38.000', tag: 'Bestseller 🍔', desc: 'Burger sapi premium dengan daging juicy yang tebal, keju cheddar meleleh, selada segar, dan saus racikan spesial.' },
-            'marker-bakso': { title: 'Bakso & Mie Ayam', price: 'Rp 22.000', tag: 'Rekomendasi 🍜', desc: 'Mie ayam klasik dengan potongan daging ayam manis melimpah ditambah semangkuk bakso urat hangat berkuah kaldu gurih.' },
-            'marker-sate': { title: 'Sate Khas Indonesia', price: 'Rp 28.000', tag: 'Menu Tradisional 🍢', desc: 'Daging pilihan yang dibakar di atas arang tradisional, disajikan dengan lumuran bumbu kacang kental yang gurih.' },
-            'marker-paket': { title: 'Paket Puas Makan Siang', price: 'Rp 45.000', tag: 'Paling Hemat 🍱', desc: 'Kombinasi hidangan makan siang lengkap, porsi mengenyangkan yang dipaketkan khusus lengkap dengan minuman segar.' }
+            'marker-burger': { title: 'Premium Beef Burger', price: 'Rp 38.000', tag: 'Bestseller 🍔', desc: 'Burger sapi premium dengan daging juicy yang tebal, keju cheddar meleleh, selada segar, dan saus racikan rahasia.' },
+            'marker-bakso': { title: 'Bakso & Mie Ayam', price: 'Rp 22.000', tag: 'Rekomendasi 🍜', desc: 'Mie ayam klasik dengan potongan daging ayam manis melimpah ditambah semangkuk bakso urat hangat.' },
+            'marker-sate': { title: 'Sate Khas Indonesia', price: 'Rp 28.000', tag: 'Tradisional 🍢', desc: 'Daging pilihan yang dibakar di atas arang batok, disajikan dengan bumbu kacang kental yang gurih.' },
+            'marker-paket': { title: 'Paket Puas Makan Siang', price: 'Rp 45.000', tag: 'Paling Hemat 🍱', desc: 'Kombinasi hidangan makan siang lengkap, porsi mengenyangkan dipaketkan khusus beserta es teh lemon.' }
         };
 
+        const assetsLibrary = document.getElementById('assets-library');
+        const startBtn = document.getElementById('btn-start');
+
+        // Solusi Anti-Stuck: Pengecekan sinkron & asinkron
+        function unlockFramework() {
+            document.getElementById('loading-icon').innerText = '✨';
+            document.getElementById('loading-icon').classList.remove('spin-anim');
+            document.getElementById('permission-title').innerText = 'Panggung AR Siap';
+            document.getElementById('permission-desc').innerText = 'Seluruh geometri 3D telah masuk ke memori GPU. Klik tombol di bawah untuk menyalakan kamera.';
+            startBtn.style.display = 'inline-block';
+        }
+
+        if (assetsLibrary) {
+            if (assetsLibrary.hasLoaded) {
+                unlockFramework();
+            } else {
+                assetsLibrary.addEventListener('loaded', unlockFramework);
+            }
+        }
+
         function initiateARFramework() {
-            // Memicu izin orientasi perangkat untuk iOS/Android modern
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().catch(err => console.warn(err));
             }
 
-            document.getElementById('camera-permission-screen').style.display = 'none';
-            document.getElementById('ar-ui-layer').style.display = 'flex';
+            // Transisi menghilang yang halus tanpa merusak kalkulasi canvas Three.js
+            const permScreen = document.getElementById('camera-permission-screen');
+            permScreen.classList.add('hidden');
             
-            // Tampilkan container scene
-            const container = document.getElementById('scene-container');
-            container.style.display = 'block';
-
-            // Resize window paksa agar komponen video AR.js melakukan kalkulasi ulang dimensi kamera
-            window.dispatchEvent(new Event('resize'));
-
+            document.getElementById('ar-ui-layer').style.display = 'flex';
             initiateMarkerListeners();
         }
 
@@ -149,7 +164,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const refreshBtn = document.querySelector('.btn-refresh');
-            if (refreshBtn) { refreshBtn.onclick = showInstructions; }
+            if (refreshBtn) refreshBtn.onclick = showInstructions;
         });
 
         function initiateMarkerListeners() {
@@ -179,13 +194,12 @@
 
                 markerAlert.classList.add('show');
                 clearTimeout(markerDetectedTimeout);
-                markerDetectedTimeout = setTimeout(() => { markerAlert.classList.remove('show'); }, 3000);
+                markerDetectedTimeout = setTimeout(() => { markerAlert.classList.remove('show'); }, 2500);
 
                 scanPrompt.style.display = 'none';
                 detailCard.classList.add('active');
                 document.querySelector('.camera-status-badge').classList.remove('show');
-
-                playDetectionSound();
+                playBeep();
             }
 
             function onMarkerLost() {
@@ -196,32 +210,23 @@
                 document.querySelector('.camera-status-badge').classList.add('show');
             }
 
-            // Memastikan listener dipasang dengan aman setelah scene siap
-            const scene = document.querySelector('a-scene');
-            if (scene) {
-                scene.addEventListener('loaded', () => {
-                    document.querySelectorAll('a-marker').forEach(marker => {
-                        marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
-                        marker.addEventListener('markerLost', () => onMarkerLost());
-                    });
-                });
-            }
+            document.querySelectorAll('a-marker').forEach(marker => {
+                marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
+                marker.addEventListener('markerLost', () => onMarkerLost());
+            });
         }
 
-        function playDetectionSound() {
+        function playBeep() {
             try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-                oscillator.connect(gain);
-                gain.connect(audioContext.destination);
-                oscillator.frequency.value = 900;
-                oscillator.type = 'sine';
-                gain.gain.setValueAtTime(0.15, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.15);
-            } catch (e) { console.log('Audio feedback error'); }
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 850;
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12);
+            } catch(e){}
         }
     </script>
 </body>
