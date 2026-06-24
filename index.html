@@ -6,7 +6,6 @@
     <title>WebAR Menu Kuliner Interaktif - Kelompok 1</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.3.0/aframe.min.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar.js"></script>
     
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
@@ -15,40 +14,33 @@
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background-color: #000000; }
         
-        /* Memaksa elemen video kamera buatan AR.js agar merender penuh di layar handphone */
-        video { 
+        /* SOLUSI UTAMA: Video Tag Native HTML5 ditaruh di tumpukan paling bawah */
+        #webcam-video-stream {
             position: fixed !important; top: 0 !important; left: 0 !important; 
             width: 100% !important; height: 100% !important; 
-            object-fit: cover !important; z-index: 0 !important; 
-            display: block !important; margin: 0 !important; padding: 0 !important;
-        }
-        canvas { 
-            position: fixed !important; top: 0 !important; left: 0 !important; 
-            width: 100% !important; height: 100% !important; z-index: 1 !important;
-            margin: 0 !important; padding: 0 !important; display: block !important;
-        }
-        .a-canvas { 
-            position: fixed !important; top: 0 !important; left: 0 !important; 
-            width: 100% !important; height: 100% !important; z-index: 1 !important; 
-            margin: 0 !important; padding: 0 !important; display: block !important;
-        }
-        #scene-placeholder {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
-        }
-        a-scene {
-            position: fixed !important; top: 0 !important; left: 0 !important; 
-            width: 100% !important; height: 100% !important; z-index: 1 !important;
-            margin: 0 !important; padding: 0 !important;
+            object-fit: cover !important; z-index: -20 !important; 
+            display: none; margin: 0 !important; padding: 0 !important;
         }
         
-        /* Container Lapisan Antarmuka UI */
+        /* Kanvas WebGL A-Frame dibuat transparan sempurna agar video di bawahnya tembus pandang */
+        .a-canvas { 
+            position: fixed !important; top: 0 !important; left: 0 !important; 
+            width: 100% !important; height: 100% !important; z-index: -10 !important; 
+            background: transparent !important;
+        }
+        
+        #scene-placeholder {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -15;
+        }
+        
+        /* Overlay UI Layer di posisi paling depan */
         #ar-ui-layer {
             position: absolute; inset: 0; z-index: 10; display: none; flex-direction: column;
             justify-content: space-between; padding: 16px; box-sizing: border-box; pointer-events: none;
         }
         #ar-ui-layer * { pointer-events: auto; }
 
-        /* Layar Konfirmasi Awal (Mencegah Pemblokiran Otomatis Sandbox Browser iOS) */
+        /* Layar Awal Pemicu Kamera */
         #camera-permission-screen {
             position: absolute; inset: 0; z-index: 9999; background: #111827;
             display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: white;
@@ -59,7 +51,7 @@
             box-shadow: 0 10px 25px rgba(234, 88, 12, 0.4); margin-top: 20px;
         }
 
-        /* Top Bar Header Glassmorphism */
+        /* UI Elements */
         .modern-header {
             display: flex; justify-content: space-between; align-items: center;
             background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -73,104 +65,46 @@
         .status-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; display: inline-block; }
         .btn-refresh { border: none; background: #f3f4f6; padding: 10px; border-radius: 12px; cursor: pointer; }
 
-        /* Instructions Modal */
         #instructions-modal {
             position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 50;
             display: none; align-items: center; justify-content: center; padding: 20px;
         }
         #instructions-modal.show { display: flex; }
-        .modal-content {
-            background: #fff; border-radius: 24px; padding: 24px; max-width: 420px;
-            width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
+        .modal-content { background: #fff; border-radius: 24px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
         .modal-close { float: right; background: none; border: none; font-size: 24px; cursor: pointer; color: #4b5563; }
         .modal-title { font-size: 20px; font-weight: 800; color: #111827; margin: 0 0 12px 0; }
         .modal-text { font-size: 14px; color: #4b5563; line-height: 1.6; margin: 0 0 16px 0; }
-        .marker-preview {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;
-        }
-        .marker-item {
-            background: #f3f4f6; padding: 12px; border-radius: 12px; text-align: center;
-            border: 2px solid #e5e7eb;
-        }
+        .marker-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+        .marker-item { background: #f3f4f6; padding: 12px; border-radius: 12px; text-align: center; border: 2px solid #e5e7eb; }
         .marker-item.active { border-color: #f59e0b; background: #fffbeb; }
         .marker-emoji { font-size: 32px; margin: 8px 0; }
         .marker-name { font-size: 12px; font-weight: 700; color: #111827; }
         .btn-close-modal { width: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 700; }
 
-
-        /* Panduan Pembidikan & Targeting Reticle */
         .scan-prompt-box { display: flex; flex-direction: column; align-items: center; text-align: center; color: #ffffff; margin-bottom: 120px; text-shadow: 0 2px 4px rgba(0,0,0,0.6); }
         .scan-target { width: 80px; height: 80px; border: 4px dashed #fbbf24; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 32px; background: rgba(0,0,0,0.4); margin-bottom: 14px; }
         .scan-text { font-size: 14px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 50px; }
 
-        /* Crosshair Targeting di Tengah Layar */
-        #camera-crosshair {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5;
-            width: 120px; height: 120px; pointer-events: none;
-        }
-        .crosshair-circle {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 100%; height: 100%; border: 3px solid rgba(251, 191, 36, 0.5); border-radius: 50%;
-            box-shadow: inset 0 0 20px rgba(251, 191, 36, 0.3);
-        }
-        .crosshair-h, .crosshair-v {
-            position: absolute; background: rgba(251, 191, 36, 0.6);
-        }
+        #camera-crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; width: 120px; height: 120px; pointer-events: none; }
+        .crosshair-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; border: 3px solid rgba(251, 191, 36, 0.5); border-radius: 50%; box-shadow: inset 0 0 20px rgba(251, 191, 36, 0.3); }
+        .crosshair-h, .crosshair-v { position: absolute; background: rgba(251, 191, 36, 0.6); }
         .crosshair-h { top: 50%; left: 0; width: 100%; height: 2px; transform: translateY(-50%); }
         .crosshair-v { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
-        .crosshair-dot {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 8px; height: 8px; background: #fbbf24; border-radius: 50%;
-            box-shadow: 0 0 12px rgba(251, 191, 36, 0.8);
-        }
-        #camera-crosshair.detected {
-            animation: pulse 0.6s ease-in-out 3;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.15); }
-        }
+        .crosshair-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #fbbf24; border-radius: 50%; box-shadow: 0 0 12px rgba(251, 191, 36, 0.8); }
+        
+        #camera-crosshair.detected { animation: pulse 0.6s ease-in-out 3; }
+        @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.15); } }
 
-        /* Camera Status Indicator */
-        .camera-status-badge {
-            position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20;
-            background: rgba(16, 185, 129, 0.9); color: white; padding: 8px 16px;
-            border-radius: 50px; font-size: 12px; font-weight: 700;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-            display: none; align-items: center; gap: 8px;
-        }
+        .camera-status-badge { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(16, 185, 129, 0.9); color: white; padding: 8px 16px; border-radius: 50px; font-size: 12px; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); display: none; align-items: center; gap: 8px; }
         .camera-status-badge.show { display: flex; }
-        .status-pulse {
-            width: 8px; height: 8px; background: #fff; border-radius: 50%;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
+        .status-pulse { width: 8px; height: 8px; background: #fff; border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        /* Marker Detection Alert */
-        #marker-detected-alert {
-            position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 20;
-            background: linear-gradient(135deg, #10b981, #059669); color: white;
-            padding: 12px 24px; border-radius: 50px; font-weight: 700;
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
-            display: none; align-items: center; gap: 10px;
-            animation: slideUp 0.4s ease-out;
-        }
+        #marker-detected-alert { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 20; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 700; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); display: none; align-items: center; gap: 10px; animation: slideUp 0.4s ease-out; }
         #marker-detected-alert.show { display: flex; }
-        @keyframes slideUp {
-            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
-            to { transform: translateX(-50%) translateY(0); opacity: 1; }
-        }
+        @keyframes slideUp { from { transform: translateX(-50%) translateY(100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
 
-        /* Detail Menu Card Pop-up */
-        .menu-card {
-            background: #ffffff; padding: 22px; border-radius: 32px; box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-            width: 100%; max-width: 420px; margin: 0 auto 5px auto; box-sizing: border-box;
-            transform: translateY(40px); opacity: 0; transition: all 0.4s ease; display: none;
-        }
+        .menu-card { background: #ffffff; padding: 22px; border-radius: 32px; box-shadow: 0 25px 50px rgba(0,0,0,0.3); width: 100%; max-width: 420px; margin: 0 auto 5px auto; box-sizing: border-box; transform: translateY(40px); opacity: 0; transition: all 0.4s ease; display: none; }
         .menu-card.active { display: block; transform: translateY(0); opacity: 1; }
         .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .tag-recommendation { background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 50px; text-transform: uppercase; }
@@ -182,17 +116,18 @@
 </head>
 <body>
 
+    <video id="webcam-video-stream" autoplay muted playsinline webkit-playsinline></video>
+
     <div id="camera-permission-screen">
         <div style="font-size: 50px;">📸</div>
         <h2 style="margin: 15px 0 10px 0; font-size: 22px;">Konfirmasi Akses Kamera</h2>
         <p style="font-size: 14px; color: #9ca3af; max-width: 300px; margin: 0 auto; line-height: 1.5;">
             Sistem WebAR Kelompok 1 membutuhkan otorisasi penuh untuk menyalakan sensor kamera belakang *smartphone*.
         </p>
-        <button class="btn-start-ar" onclick="initiateARScene()">Mulai Kamera Belakang</button>
+        <button class="btn-start-ar" onclick="startHardwareCamera()">Mulai Kamera Belakang</button>
     </div>
 
     <div id="ar-ui-layer">
-        <!-- Crosshair Targeting Reticle -->
         <div id="camera-crosshair">
             <div class="crosshair-circle"></div>
             <div class="crosshair-h"></div>
@@ -200,15 +135,13 @@
             <div class="crosshair-dot"></div>
         </div>
 
-        <!-- Camera Status Badge -->
         <div class="camera-status-badge show">
             <span class="status-pulse"></span>
             <span>Kamera Aktif</span>
         </div>
 
-        <!-- Marker Detected Alert -->
         <div id="marker-detected-alert">
-            ✓ Menu Terdeteksi! Gulir ke bawah untuk detail
+            ✓ Menu Terdeteksi! Silakan lihat detail di bawah
         </div>
 
         <header class="modern-header">
@@ -219,7 +152,7 @@
                     <p class="brand-sub"><span class="status-dot"></span> Kelompok 1 - WebAR PBR</p>
                 </div>
             </div>
-            <button onclick="window.location.reload()" class="btn-refresh">🔄</button>
+            <button class="btn-refresh">ℹ️</button>
         </header>
 
         <div id="scan-prompt" class="scan-prompt-box">
@@ -240,228 +173,102 @@
         </footer>
     </div>
 
-    <!-- Instructions Modal -->
     <div id="instructions-modal">
         <div class="modal-content">
             <button class="modal-close" onclick="closeInstructions()">✕</button>
             <h2 class="modal-title">📍 Cara Menggunakan AR Menu</h2>
-            <p class="modal-text"><strong>1. Arahkan kamera ke marker</strong> di Buku Menu fisik untuk menampilkan model 3D interaktif.</p>
-            <p class="modal-text"><strong>2. Geser marker</strong> untuk merotasi dan mengukur model 3D di layar Anda.</p>
-            <p class="modal-text"><strong>3. Pilih menu</strong> dari detail kartu untuk melihat harga dan deskripsi lengkap.</p>
-            
-            <p style="font-size: 13px; color: #4b5563; margin-top: 16px; font-weight: 700;">Marker yang didukung:</p>
-            <div class="marker-preview">
-                <div class="marker-item active">
-                    <div class="marker-emoji">⬜</div>
-                    <div class="marker-name">HIRO Pattern</div>
-                    <div style="font-size: 11px; color: #4b5563; margin-top: 4px;">Nasi Goreng</div>
-                </div>
-                <div class="marker-item">
-                    <div class="marker-emoji">⬜</div>
-                    <div class="marker-name">Kanji Pattern</div>
-                    <div style="font-size: 11px; color: #4b5563; margin-top: 4px;">Es Teh</div>
-                </div>
-            </div>
-
-            <p style="font-size: 12px; color: #9ca3af; background: #f3f4f6; padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin: 16px 0;">
-                💡 Tip: Pastikan pencahayaan yang cukup dan marker terlihat jelas di kamera untuk hasil terbaik.
-            </p>
-
-            <button class="btn-close-modal" onclick="closeInstructions()">Tutup</button>
+            <p class="modal-text"><strong>1. Arahkan kamera</strong> ke marker fisik untuk memunculkan model makanan 3D secara interaktif.</p>
+            <p class="modal-text"><strong>2. Sentuh & Geser</strong> objek 3D di layar untuk melakukan rotasi atau mengubah skala ukuran.</p>
+            <button class="btn-close-modal" onclick="closeInstructions()">Saya Mengerti</button>
         </div>
     </div>
 
     <div id="scene-placeholder"></div>
 
     <script>
-        // Global camera stream reference
-        let globalCameraStream = null;
-
-        async function requestCameraAccess() {
-            console.log('📸 Requesting camera access...');
-            try {
-                // Request camera permission
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: false
-                });
-
-                globalCameraStream = stream;
-                console.log('✓ Camera access granted!');
-                return stream;
-            } catch (error) {
-                console.error('❌ Camera access denied:', error.name, error.message);
-                
-                // Show error message
-                const permissionScreen = document.getElementById('camera-permission-screen');
-                const errorMsg = document.createElement('div');
-                errorMsg.style.cssText = 'color: #ef4444; font-size: 14px; margin-top: 20px; background: #fee2e2; padding: 12px; border-radius: 8px; border-left: 3px solid #ef4444;';
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMsg.innerHTML = '❌ <strong>Akses Kamera Ditolak</strong><br>Silakan izinkan akses kamera di pengaturan browser.';
-                } else if (error.name === 'NotFoundError') {
-                    errorMsg.innerHTML = '❌ <strong>Kamera Tidak Ditemukan</strong><br>Pastikan perangkat memiliki kamera yang berfungsi.';
-                } else {
-                    errorMsg.innerHTML = `❌ <strong>Error:</strong> ${error.name}<br>${error.message}`;
-                }
-                
-                permissionScreen.appendChild(errorMsg);
-                throw error;
-            }
-        }
-
-        function initiateARScene() {
-            // 1. Memicu izin sensor gerak iOS
+        function startHardwareCamera() {
+            // Memicu sensor gerak gyro iOS jika ada
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(() => console.log('✓ Motion sensor permission granted'))
-                    .catch(err => console.warn('⚠ Motion sensor permission:', err.message));
+                DeviceOrientationEvent.requestPermission().catch(err => console.warn(err));
             }
 
-            // 2. Request camera access first
-            requestCameraAccess().then(() => {
-                // 3. Sembunyikan blocker screen
-                document.getElementById('camera-permission-screen').style.display = 'none';
-                document.getElementById('ar-ui-layer').style.display = 'flex';
+            const nativeVideo = document.getElementById('webcam-video-stream');
 
-                // 4. Suntikkan skrip a-scene AR.js
-                const placeholder = document.getElementById('scene-placeholder');
-                placeholder.innerHTML = `
-                    <a-scene 
-                        embedded 
-                        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
-                        gesture-detector
-                        renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: false; precision: mediump;"
-                        vr-mode-ui="enabled: false"
-                        style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; z-index: 1;"
-                    >
-                        <a-assets>
-                            <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
-                            <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
-                        </a-assets>
-
-                        <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
-                        <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
-                        <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
-
-                        <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                            <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                        </a-marker>
-
-                        <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
-                            <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
-                        </a-marker>
-
-                        <a-entity camera position="0 0 0"></a-entity>
-                    </a-scene>
-                `;
-
-                console.log('🎬 AR Scene injected, waiting for A-Frame to load...');
-
-                // 5. Setup camera feed setelah A-Frame load
-                setTimeout(() => {
-                    setupCameraFeed();
-                    initiateMarkerListeners();
-                }, 1500);
-            }).catch(error => {
-                console.error('❌ Failed to start AR scene:', error);
-                // Error message sudah ditampilkan di requestCameraAccess
+            // PAKSA JAVASCRIPT NATIVE MEMINTA AKSES LENSA KAMERA BELAKANG
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            })
+            .then(function(stream) {
+                // Alirkan data kamera ke elemen video HTML5 murni
+                nativeVideo.srcObject = stream;
+                nativeVideo.style.display = 'block';
+                nativeVideo.play().then(() => {
+                    console.log("✓ Kamera device berhasil menyala dan memancarkan gambar.");
+                    
+                    // Setelah kamera dipastikan menyala, barulah panggil panggung AR.js
+                    injectARSceneFramework();
+                }).catch(err => alert("Gagal memutar aliran video: " + err.message));
+            })
+            .catch(function(error) {
+                console.error("Akses kamera ditolak oleh browser:", error);
+                alert("Gagal memicu kamera native browser: " + error.name + "\nPastikan Anda menekan tombol 'Izinkan/Allow' saat konfirmasi keamanan browser muncul.");
             });
         }
 
-        function setupCameraFeed() {
-            console.log('🎥 Configuring camera feed...');
-            
-            let attempts = 0;
-            const maxAttempts = 50;
-            
-            const configInterval = setInterval(() => {
-                attempts++;
-                const videoEl = document.querySelector('video');
-                const sceneEl = document.querySelector('a-scene');
-                
-                if (videoEl) {
-                    console.log(`✓ Video element found (attempt ${attempts})`);
-                    
-                    // Force video element configuration
-                    videoEl.muted = true;
-                    videoEl.setAttribute('playsinline', 'true');
-                    videoEl.setAttribute('webkit-playsinline', 'true');
-                    videoEl.setAttribute('autoplay', 'true');
-                    videoEl.setAttribute('muted', 'true');
-                    
-                    // Apply critical styles
-                    applyVideoStyles(videoEl);
-                    
-                    // Try to play
-                    videoEl.play()
-                        .then(() => {
-                            console.log('✓ Video stream playing!');
-                            clearInterval(configInterval);
-                        })
-                        .catch(err => {
-                            if (attempts % 10 === 0) {
-                                console.warn(`⏳ Video play pending... (${attempts})`);
-                            }
-                        });
-                } else if (attempts > maxAttempts) {
-                    console.error('❌ Video element not found after', maxAttempts, 'attempts');
-                    clearInterval(configInterval);
-                    
-                    // Show error in UI
-                    const uiLayer = document.getElementById('ar-ui-layer');
-                    const errorDiv = document.createElement('div');
-                    errorDiv.style.cssText = 'position: fixed; bottom: 20px; left: 20px; right: 20px; background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; z-index: 100; font-size: 12px; border-left: 3px solid #dc2626;';
-                    errorDiv.innerHTML = '❌ Gagal memuat feed kamera. Refresh halaman atau coba lagi.';
-                    document.body.appendChild(errorDiv);
-                }
-                
+        function injectARSceneFramework() {
+            // Sembunyikan blocker awal dan buka overlay UI instan
+            document.getElementById('camera-permission-screen').style.display = 'none';
+            document.getElementById('ar-ui-layer').style.display = 'flex';
+
+            // SUNTIKKAN SCENE: Ubah sourceType menjadi 'video' dan arahkan jalurnya ke id video native kita (#webcam-video-stream)
+            const placeholder = document.getElementById('scene-placeholder');
+            placeholder.innerHTML = `
+                <a-scene 
+                    embedded 
+                    arjs="sourceType: video; sourceWebcam: #webcam-video-stream; debugUIEnabled: false; detectionMode: mono_and_matrix;" 
+                    gesture-detector
+                    renderer="logarithmicDepthBuffer: true; colorManagement: true; antialias: true; alpha: true; precision: mediump;"
+                    vr-mode-ui="enabled: false"
+                >
+                    <a-assets>
+                        <a-asset-item id="nasgor-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Bowl/glTF/Bowl.gltf"></a-asset-item>
+                        <a-asset-item id="esteh-model" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf"></a-asset-item>
+                    </a-assets>
+
+                    <a-entity light="type: ambient; intensity: 0.9; color: #ffffff;"></a-entity>
+                    <a-entity light="type: directional; intensity: 1.4; color: #fff7ee; castShadow: true;" position="2 4 3"></a-entity>
+                    <a-entity light="type: point; intensity: 0.6; distance: 4; decay: 2" position="-1 2 1"></a-entity>
+
+                    <a-marker preset="hiro" id="marker-nasgor" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                        <a-entity gltf-model="#nasgor-model" position="0 0 0" scale="2 2 2" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                    </a-marker>
+
+                    <a-marker preset="kanji" id="marker-esteh" raycaster="objects: .clickable" emitevents="true" cursor="fuse: false; rayOrigin: mouse;">
+                        <a-entity gltf-model="#esteh-model" position="0 0 0" scale="1.8 1.8 1.8" class="clickable" gesture-handler="minScale: 0.5; maxScale: 4;"></a-entity>
+                    </a-marker>
+
+                    <a-entity camera position="0 0 0"></a-entity>
+                </a-scene>
+            `;
+
+            // Pasang pendengar marker dan micu kalkulasi ulang ukuran tampilan layar
+            initiateMarkerListeners();
+            setTimeout(() => {
                 window.dispatchEvent(new Event('resize'));
-            }, 300);
-
-            // Auto cleanup
-            setTimeout(() => { clearInterval(configInterval); }, 20000);
+            }, 800);
         }
 
-        function applyVideoStyles(videoEl) {
-            const styles = {
-                'position': 'fixed',
-                'top': '0',
-                'left': '0',
-                'width': '100%',
-                'height': '100%',
-                'object-fit': 'cover',
-                'z-index': '0',
-                'display': 'block',
-                'margin': '0',
-                'padding': '0',
-                'border': 'none'
-            };
+        function closeInstructions() { document.getElementById('instructions-modal').classList.remove('show'); }
+        function showInstructions() { document.getElementById('instructions-modal').classList.add('show'); }
 
-            Object.entries(styles).forEach(([key, value]) => {
-                videoEl.style.setProperty(key, value, 'important');
-            });
-        }
-
-        function closeInstructions() {
-            document.getElementById('instructions-modal').classList.remove('show');
-        }
-
-        function showInstructions() {
-            document.getElementById('instructions-modal').classList.add('show');
-        }
-
-        // Update header button untuk menampilkan instruksi
         document.addEventListener('DOMContentLoaded', () => {
             const refreshBtn = document.querySelector('.btn-refresh');
-            if (refreshBtn) {
-                refreshBtn.innerHTML = 'ℹ️';
-                refreshBtn.onclick = showInstructions;
-            }
+            if (refreshBtn) { refreshBtn.onclick = showInstructions; }
         });
 
         const menuDatabase = {
@@ -489,44 +296,29 @@
             const uiPrice = document.getElementById('food-price');
             const uiTag = document.getElementById('food-tag');
             const uiDesc = document.getElementById('food-desc');
-
             let markerDetectedTimeout;
 
             function onMarkerFound(markerId) {
                 const data = menuDatabase[markerId];
                 if (!data) return;
 
-                // Update UI dengan data menu
                 uiTitle.innerText = data.title;
                 uiPrice.innerText = data.price;
                 uiTag.innerText = data.tag;
                 uiDesc.innerText = data.desc;
 
-                // Tampilkan crosshair pulse animation
                 crosshair.classList.remove('detected');
-                void crosshair.offsetWidth; // Trigger reflow untuk restart animation
+                void crosshair.offsetWidth; 
                 crosshair.classList.add('detected');
 
-                // Tampilkan marker detected alert
                 markerAlert.classList.add('show');
                 clearTimeout(markerDetectedTimeout);
-                markerDetectedTimeout = setTimeout(() => {
-                    markerAlert.classList.remove('show');
-                }, 3000);
+                markerDetectedTimeout = setTimeout(() => { markerAlert.classList.remove('show'); }, 3000);
 
-                // Tampilkan detail card
                 scanPrompt.style.display = 'none';
                 detailCard.classList.add('active');
-
-                // Hapus status camera badge
                 document.querySelector('.camera-status-badge').classList.remove('show');
 
-                // Trigger haptic feedback jika didukung
-                if (navigator.vibrate) {
-                    navigator.vibrate([100, 50, 100]);
-                }
-
-                // Trigger sound effect (opsional)
                 playDetectionSound();
             }
 
@@ -538,33 +330,29 @@
                 document.querySelector('.camera-status-badge').classList.add('show');
             }
 
-            document.querySelectorAll('a-marker').forEach(marker => {
-                marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
-                marker.addEventListener('markerLost', () => onMarkerLost());
-            });
+            // Delegasi listener menunggu elemen diinjeksikan secara penuh di DOM
+            setTimeout(() => {
+                document.querySelectorAll('a-marker').forEach(marker => {
+                    marker.addEventListener('markerFound', () => onMarkerFound(marker.id));
+                    marker.addEventListener('markerLost', () => onMarkerLost());
+                });
+            }, 2000);
         }
 
         function playDetectionSound() {
-            // Create beep sound menggunakan Web Audio API
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gain = audioContext.createGain();
-                
                 oscillator.connect(gain);
                 gain.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
+                oscillator.frequency.value = 850;
                 oscillator.type = 'sine';
-                
-                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-                
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
                 oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.3);
-            } catch (e) {
-                console.log('Audio feedback not available');
-            }
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (e) { console.log('Audio feedback error'); }
         }
     </script>
 </body>
